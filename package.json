@@ -1,6 +1,6 @@
 {
   "name": "spinne",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "Spins a web of components and analyzes prop usage, adoption and more",
   "type": "module",
   "repository": {
