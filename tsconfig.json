@@ -9,7 +9,6 @@
     "forceConsistentCasingInFileNames": true,
     "inlineSources": false,
     "isolatedModules": true,
-    "moduleResolution": "node",
     "noUnusedLocals": false,
     "noUnusedParameters": false,
     "preserveWatchOutput": true,
@@ -24,7 +23,6 @@
     "resolveJsonModule": true,
     "rootDir": "./src",
     "skipDefaultLibCheck": true,
-    "skipLibCheck": true,
     "sourceMap": false,
     "target": "es2022",
     "verbatimModuleSyntax": true
