@@ -14,13 +14,7 @@ it("should create an empty report if no components were found", async () => {
   await scan({ directory: cwdEmpty });
 
   expect(mockedFs.writeJSON).toHaveBeenCalledTimes(1);
-  expect(mockedFs.writeJSON.mock.calls[0][1]).toMatchInlineSnapshot(`
-    [
-      {
-        "components": [],
-      },
-    ]
-  `);
+  expect(mockedFs.writeJSON.mock.calls[0][1]).toMatchInlineSnapshot(`[]`);
 });
 
 it("should create a basic report", async () => {

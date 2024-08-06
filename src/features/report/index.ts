@@ -207,7 +207,7 @@ export const makeReport = async (cwd: string) => {
 
     const scannedCode = scanAST({ code, filePath: file });
 
-    report.push(scannedCode);
+    if (scannedCode && scannedCode.components && scannedCode.components.length > 1) report.push(scannedCode);
   }
 
   return report;
