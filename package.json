@@ -47,6 +47,7 @@
     "knip": "5.27.0",
     "msw": "2.3.3",
     "ndb": "1.1.5",
+    "semantic-release": "24.0.0",
     "tsup": "8.2.3",
     "typescript": "5.5.4",
     "vite": "5.3.4",
