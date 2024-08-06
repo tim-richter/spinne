@@ -8,8 +8,8 @@ export function initLogger(level = 'info') {
     transport: {
       target: 'pino-pretty',
       options: {
-        colorize: true
-      }
+        include: 'level',
+      },
     }
   })
 }

@@ -5,7 +5,7 @@ import fs from "fs-extra";
 import { join } from "../../utils/path.js";
 import { scan } from "./scan.js";
 import { isJSXAttribute, isJSXOpeningElement } from "./util.js";
-import { getLogger } from "../..//utils/logger.js";
+import { getLogger } from "../../utils/logger.js";
 
 interface ImportInfo {
   imported?: string;
@@ -198,7 +198,7 @@ export function scanAST({ code, filePath }: ScanArgs): ScanResult {
 
 export const makeReport = async (cwd: string) => {
   const files = scan(cwd);
-  getLogger().info(`Found files to scan ${JSON.stringify(files)}`)
+  getLogger().info(`Found ${files.length} files`)
 
   const report: Array<ScanResult> = [];
 

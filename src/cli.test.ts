@@ -16,9 +16,9 @@ it("should output help if no matched commands were given", async () => {
   expect(mockConsole.mock.calls).toMatchInlineSnapshot(`
     [
       [
-        "Usage: snoop [options] [command]
+        "Usage: spinne [options] [command]
 
-    Snoop scans your code for component usage and creates a report.
+    Spins a web of components and analyzes prop usage, adoption and more
 
     Options:
       -V, --version   output the version number
@@ -30,9 +30,9 @@ it("should output help if no matched commands were given", async () => {
     ",
       ],
       [
-        "Usage: snoop [options] [command]
+        "Usage: spinne [options] [command]
 
-    Snoop scans your code for component usage and creates a report.
+    Spins a web of components and analyzes prop usage, adoption and more
 
     Options:
       -V, --version   output the version number
@@ -66,9 +66,9 @@ it("should output help if 'help' command was used", async () => {
     ",
       ],
       [
-        "Usage: snoop [options] [command]
+        "Usage: spinne [options] [command]
 
-    Snoop scans your code for component usage and creates a report.
+    Spins a web of components and analyzes prop usage, adoption and more
 
     Options:
       -V, --version   output the version number
@@ -80,9 +80,9 @@ it("should output help if 'help' command was used", async () => {
     ",
       ],
       [
-        "Usage: snoop [options] [command]
+        "Usage: spinne [options] [command]
 
-    Snoop scans your code for component usage and creates a report.
+    Spins a web of components and analyzes prop usage, adoption and more
 
     Options:
       -V, --version   output the version number
