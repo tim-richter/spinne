@@ -8,3 +8,14 @@ Spinne
 <p align="center">
 Spins a web of components and analyzes prop usage, adoption and more!
 <p>
+
+## Usage
+
+To scan for components in your current directory:
+```bash
+npx spinne scan
+```
+
+## Options
+
+- `-d, --directory <path>`: scan from a different directory
