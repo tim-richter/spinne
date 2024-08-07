@@ -7,6 +7,31 @@ settings:
 importers:
 
   .:
+    dependencies:
+      '@typescript-eslint/typescript-estree':
+        specifier: 7.17.0
+        version: 7.17.0(typescript@5.5.4)
+      estree-walker:
+        specifier: 3.0.3
+        version: 3.0.3
+      fdir:
+        specifier: 6.2.0
+        version: 6.2.0(picomatch@4.0.2)
+      fs-extra:
+        specifier: 11.2.0
+        version: 11.2.0
+      pino:
+        specifier: 9.3.1
+        version: 9.3.1
+      pino-pretty:
+        specifier: 11.2.1
+        version: 11.2.1
+      typescript:
+        specifier: 5.5.4
+        version: 5.5.4
+      yargs:
+        specifier: 17.7.2
+        version: 17.7.2
     devDependencies:
       '@types/fs-extra':
         specifier: 11.0.4
@@ -17,9 +42,6 @@ importers:
       '@types/yargs':
         specifier: 17.0.33
         version: 17.0.33
-      '@typescript-eslint/typescript-estree':
-        specifier: 7.17.0
-        version: 7.17.0(typescript@5.5.4)
       '@vitest/coverage-v8':
         specifier: 1.6.0
         version: 1.6.0(vitest@1.6.0(@types/node@20.14.11))
@@ -29,18 +51,9 @@ importers:
       esbuild:
         specifier: 0.20.2
         version: 0.20.2
-      estree-walker:
-        specifier: 3.0.3
-        version: 3.0.3
       execa:
         specifier: 9.3.0
         version: 9.3.0
-      fdir:
-        specifier: 6.2.0
-        version: 6.2.0(picomatch@4.0.2)
-      fs-extra:
-        specifier: 11.2.0
-        version: 11.2.0
       knip:
         specifier: 5.27.0
         version: 5.27.0(@types/node@20.14.11)(typescript@5.5.4)
@@ -50,21 +63,12 @@ importers:
       ndb:
         specifier: 1.1.5
         version: 1.1.5
-      pino:
-        specifier: 9.3.1
-        version: 9.3.1
-      pino-pretty:
-        specifier: 11.2.1
-        version: 11.2.1
       semantic-release:
         specifier: 24.0.0
         version: 24.0.0(typescript@5.5.4)
       tsup:
         specifier: 8.2.3
         version: 8.2.3(jiti@1.21.6)(postcss@8.4.40)(typescript@5.5.4)
-      typescript:
-        specifier: 5.5.4
-        version: 5.5.4
       vite:
         specifier: 5.3.4
         version: 5.3.4(@types/node@20.14.11)
@@ -74,9 +78,6 @@ importers:
       vitest-mock-extended:
         specifier: 1.3.2
         version: 1.3.2(typescript@5.5.4)(vitest@1.6.0(@types/node@20.14.11))
-      yargs:
-        specifier: 17.7.2
-        version: 17.7.2
 
 packages:
 

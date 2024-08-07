@@ -19,7 +19,7 @@
     "dist"
   ],
   "scripts": {
-    "build": "tsup src/index.ts src/cli.ts --format esm --minify --dts",
+    "build": "tsup",
     "test": "vitest",
     "test:coverage": "vitest run --coverage",
     "test:coverage:watch": "vitest watch --coverage",
@@ -28,29 +28,31 @@
     "lint:fix": "biome check --write .",
     "knip": "knip"
   },
+  "dependencies": {
+    "@typescript-eslint/typescript-estree": "7.17.0",
+    "estree-walker": "3.0.3",
+    "fdir": "6.2.0",
+    "fs-extra": "11.2.0",
+    "pino": "9.3.1",
+    "pino-pretty": "11.2.1",
+    "typescript": "5.5.4",
+    "yargs": "17.7.2"
+  },
   "devDependencies": {
     "@types/fs-extra": "11.0.4",
     "@types/node": "20.14.11",
     "@types/yargs": "17.0.33",
-    "@typescript-eslint/typescript-estree": "7.17.0",
     "@vitest/coverage-v8": "1.6.0",
     "biome": "0.3.3",
     "esbuild": "0.20.2",
-    "estree-walker": "3.0.3",
     "execa": "9.3.0",
-    "fdir": "6.2.0",
-    "fs-extra": "11.2.0",
     "knip": "5.27.0",
     "msw": "2.3.3",
     "ndb": "1.1.5",
-    "pino": "9.3.1",
-    "pino-pretty": "11.2.1",
     "semantic-release": "24.0.0",
     "tsup": "8.2.3",
-    "typescript": "5.5.4",
     "vite": "5.3.4",
     "vitest": "1.6.0",
-    "vitest-mock-extended": "1.3.2",
-    "yargs": "17.7.2"
+    "vitest-mock-extended": "1.3.2"
   }
 }
