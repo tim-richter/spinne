@@ -205,9 +205,13 @@ export const makeReport = async (cwd: string) => {
   for (const file of files) {
     const code = fs.readFileSync(join(cwd, file), "utf8");
 
-    const scannedCode = scanAST({ code, filePath: file });
+    try {
+      const scannedCode = scanAST({ code, filePath: file });
 
-    if (scannedCode && scannedCode.components && scannedCode.components.length > 1) report.push(scannedCode);
+      if (scannedCode && scannedCode.components && scannedCode.components.length > 1) report.push(scannedCode);
+    } catch(e) {
+      console.error(`Error while scanning file ${file}`, e)
+    }
   }
 
   return report;
