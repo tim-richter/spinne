@@ -1,40 +1,45 @@
-import type { Command } from "commander";
-import { scan } from "../scan.js";
+import yargs, { type CommandModule } from "yargs";
+import { hideBin } from "yargs/helpers"
 import { cwd } from "./path.js";
-import { initLogger } from "./logger.js";
 
-export const createProgram = (program: Command, args: string[]) => {
-  program
-    .name("spinne")
-    .description(
-      "Spins a web of components and analyzes prop usage, adoption and more",
-    )
-    .version("0.0.1");
+type Return = { command: 'scan', options: {
+  o: 'file' | 'console',
+  output: 'file' | 'console',
+  d: string,
+  directory: string,
+}}
 
-  program
-    .command("scan")
-    .option(
-      "-t, --tsConfig <file>",
-      "Typescript configuration path",
-      "tsconfig.json",
-    )
-    .option(
-      "-d, --directory <path>",
-      "Run process from a different directory",
-      cwd(),
-    )
-    .option(
-      "-s, --server <url>",
-      "Api Endpoint to send the report to",
-      undefined,
-    )
-    .option('-l, --log-level <level>', 'Set the debug level', 'info')
-    .action(async(options) => {
-      initLogger(options.logLevel)
-      await scan(options)
-    });
+export const createProgram = (): Return => {
+  const scanCommand: CommandModule = {
+    command: 'scan',
+    describe: 'Scan a directory for components',
+    builder: {
+      directory: {
+        alias: 'd',
+        describe: 'Path to a different directory',
+        type: 'string',
+        default: cwd()
+      },
+      output: {
+        alias: 'o',
+        describe: 'Output format',
+        type: 'string',
+        choices: ['file', 'console'],
+        default: 'file'
+      }
+    },
+    handler: (_) => {}
+  }
 
-  const result = program.parseAsync(args);
 
-  return result
+  const result = yargs(hideBin(process.argv))
+  .scriptName('spinne')
+  .command(scanCommand)
+  .help()
+  .parseSync()
+
+  const options = result as any;
+  const command = result._[0] as 'scan';
+
+  return { options, command }
 };

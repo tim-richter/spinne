@@ -29,13 +29,14 @@
     "knip": "knip"
   },
   "dependencies": {
+    "@types/yargs": "17.0.33",
     "@typescript-eslint/typescript-estree": "7.17.0",
-    "commander": "12.1.0",
     "estree-walker": "3.0.3",
     "fdir": "6.2.0",
     "fs-extra": "11.2.0",
     "pino": "9.3.1",
-    "pino-pretty": "11.2.1"
+    "pino-pretty": "11.2.1",
+    "yargs": "17.7.2"
   },
   "devDependencies": {
     "@types/fs-extra": "11.0.4",

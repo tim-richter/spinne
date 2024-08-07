@@ -11,7 +11,7 @@ it("should create an empty report if no components were found", async () => {
   vi.spyOn(fs, "writeJSON").mockImplementation(() => Promise.resolve());
   const mockedFs = fs as unknown as DeepMockProxy<typeof fs>;
 
-  await scan({ directory: cwdEmpty });
+  await scan({ directory: cwdEmpty, d: cwdEmpty, o: 'file', output: 'file' });
 
   expect(mockedFs.writeJSON).toHaveBeenCalledTimes(1);
   expect(mockedFs.writeJSON.mock.calls[0][1]).toMatchInlineSnapshot(`[]`);
@@ -21,7 +21,7 @@ it("should create a basic report", async () => {
   vi.spyOn(fs, "writeJSON").mockImplementation(() => Promise.resolve());
   const mockedFs = fs as unknown as DeepMockProxy<typeof fs>;
 
-  await scan({ directory: cwdSimple });
+  await scan({ directory: cwdSimple, d: cwdSimple, o: 'file', output: 'file' });
 
   expect(mockedFs.writeJSON).toHaveBeenCalledTimes(1);
   expect(mockedFs.writeJSON.mock.calls[0][1]).toMatchInlineSnapshot(`
