@@ -1,6 +1,6 @@
 import { expect, it } from "vitest";
 import { join } from "../../src/utils/path";
-import {execa} from 'execa'
+import { execa } from 'execa'
 
 const cli = join(__dirname, '../../bin/spinne.js')
 
@@ -28,8 +28,9 @@ it('should output help if help is cli arg', async () => {
 })
 
 it('should scan from current directory', async () => {
-  const { stdout } = await execa('node', [cli, 'scan'])
+  const { stdout, stderr } = await execa`node ${cli} scan`
 
+  expect(stderr).toMatchInlineSnapshot(`""`)
   expect(stdout).toMatchInlineSnapshot(`"INFO: Found 3 files"`)
 })
 
