@@ -9,13 +9,28 @@ Spinne
 Spins a web of components and analyzes prop usage, adoption and more!
 <p>
 
+## Installation
+
+```bash
+npm i -g spinne
+```
+
 ## Usage
 
 To scan for components in your current directory:
+
 ```bash
-npx spinne scan
+spinne scan
+```
+
+This command will output the results in a file 'scan-data.json'.
+If you want to output it directly to the console you can use `-o console`:
+
+```bash
+spinne scan -o console
 ```
 
 ## Options
 
 - `-d, --directory <path>`: scan from a different directory
+- `-o, --output <format>`: define the output format 
