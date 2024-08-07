@@ -10,7 +10,7 @@ export const scan = (crawlFrom: string) => {
     .glob(...globs)
     .withRelativePaths()
     .exclude((dirName) =>
-      dirName.startsWith("node_modules") || dirName.startsWith('.')  
+      dirName.startsWith("node_modules") || dirName.startsWith('.') || dirName.startsWith('dist') 
     )
     .crawl(crawlFrom)
     .sync();

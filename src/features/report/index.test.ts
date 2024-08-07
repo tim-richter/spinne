@@ -263,6 +263,45 @@ describe("scanAST", () => {
     `);
   });
 
+  it('should handle props with "null" syntax', () => {
+    const code = `
+export const Code = ({ title, files, deps }: CodeProps) => {
+  return (
+    <SandpackCodeEditor wrapContent />
+  )
+}
+`
+    const ast = scanAST({ code, filePath: "src/test/Component.tsx" });
+
+    expect(ast).toMatchInlineSnapshot(`
+      {
+        "components": [
+          {
+            "location": {
+              "end": {
+                "column": 23,
+                "line": 4,
+              },
+              "start": {
+                "column": 5,
+                "line": 4,
+              },
+            },
+            "name": "SandpackCodeEditor",
+            "props": [
+              {
+                "name": "wrapContent",
+                "value": true,
+              },
+            ],
+            "propsSpread": false,
+          },
+        ],
+        "filePath": "src/test/Component.tsx",
+      }
+    `)
+  })
+
   it("should parse literal values from JSXExpressionContainers", () => {
     const code = `
       import { Button } from 'my-library';

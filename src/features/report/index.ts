@@ -71,7 +71,9 @@ const getComponentNameFromAST = (
   return nameObj.name;
 };
 
-function getPropValue(node: TSESTree.JSXExpression | TSESTree.Literal) {
+function getPropValue(node: TSESTree.JSXExpression | TSESTree.Literal | null) {
+  if (!node) return true;
+
   if (node.type === "Literal") {
     return node.value;
   }
