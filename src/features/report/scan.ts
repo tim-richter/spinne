@@ -9,6 +9,9 @@ export const scan = (crawlFrom: string) => {
   const files = new fdir()
     .glob(...globs)
     .withRelativePaths()
+    .exclude((dirName) =>
+      dirName.startsWith("node_modules") || dirName.startsWith('.')  
+    )
     .crawl(crawlFrom)
     .sync();
 
