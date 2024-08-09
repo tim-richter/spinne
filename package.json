@@ -27,6 +27,8 @@
     "lint": "biome check .",
     "lint:fix": "biome check --write .",
     "lint:tsc": "tsc --noEmit --diagnostics",
+    "knip": "knip",
+    "prepare": "husky"
   },
   "dependencies": {
     "@typescript-eslint/typescript-estree": "7.17.0",
