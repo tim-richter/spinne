@@ -9,6 +9,8 @@ type Return = {
     output: 'file' | 'console';
     d: string;
     directory: string;
+    ignore: Array<string>;
+    i: Array<string>;
   };
 };
 
@@ -30,6 +32,12 @@ export const createProgram = (): Return => {
         choices: ['file', 'console'],
         default: 'file',
       },
+      ignore: {
+        alias: 'i',
+        describe: 'Ignore folders/files',
+        type: 'array',
+        default: [],
+      }
     },
     handler: (_) => {},
   };

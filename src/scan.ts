@@ -10,7 +10,7 @@ export const scan = async (
 ) => {
   try {
     initLogger('info', options.output !== 'console');
-    const report = await makeReport(options.directory);
+    const report = await makeReport(options.directory, options.ignore);
 
     if (options.output === 'file') {
       await fs.writeJSON(join(options.directory, 'scan-data.json'), report);

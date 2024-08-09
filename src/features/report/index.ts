@@ -216,8 +216,8 @@ export function scanAST({ code, filePath }: ScanArgs): ScanResult {
   return report;
 }
 
-export const makeReport = async (cwd: string) => {
-  const files = scan(cwd);
+export const makeReport = async (cwd: string, ignore: Array<string>) => {
+  const files = scan(cwd, ignore);
   getLogger().info(`Found ${files.length} files`);
 
   const report: Array<ScanResult> = [];

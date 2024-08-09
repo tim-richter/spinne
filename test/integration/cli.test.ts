@@ -43,3 +43,12 @@ it('should output directly to console if output=console was used', async () => {
     `"[{"components":[{"name":"Button","importInfo":{"imported":"Button","local":"Button","moduleName":"my-library","importType":"ImportSpecifier"},"props":[{"name":"variant","value":"blue"}],"propsSpread":false,"location":{"start":{"line":6,"column":7},"end":{"line":6,"column":13}}},{"name":"Button","importInfo":{"imported":"Button","local":"Button","moduleName":"my-library","importType":"ImportSpecifier"},"props":[{"name":"variant","value":"blue"}],"propsSpread":true,"location":{"start":{"line":7,"column":7},"end":{"line":7,"column":13}}}],"filePath":"fixtures/simple/src/Button.tsx"}]"`,
   );
 });
+
+it('should allow to ignore additional directories', async () => {
+  const { stderr, exitCode } = await execa({
+    reject: false,
+  })`node ${cli} scan -o console -i fixtures`;
+
+  expect(exitCode).toEqual(1);
+  expect(stderr).toMatchInlineSnapshot(`"No files found to scan"`);
+});

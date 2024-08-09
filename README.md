@@ -34,3 +34,6 @@ spinne scan -o console
 
 - `-d, --directory <path>`: scan from a different directory
 - `-o, --output <format>`: define the output format 
+- `-i, --ignore <path>`: define ignored folders. this is set to a reasonable default, but if
+you need more control over the scanned `.tsx` files, you might need to use this. paths will gets matched
+against all subpaths. You can define multiple via `-i fixtures dist`, or `-i fixtures -i dist`
