@@ -4,7 +4,7 @@
     "enabled": true
   },
   "files": {
-    "ignore": ["coverage", "fixtures"]
+    "ignore": ["coverage", "fixtures", "dist"]
   },
   "linter": {
     "enabled": true,
