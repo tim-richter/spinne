@@ -1,1 +1,1 @@
-export { scan } from "./scan.js";
+export { scan } from './scan.js';

@@ -1,13 +1,16 @@
-import yargs, { type CommandModule } from "yargs";
-import { hideBin } from "yargs/helpers"
-import { cwd } from "./path.js";
+import yargs, { type CommandModule } from 'yargs';
+import { hideBin } from 'yargs/helpers';
+import { cwd } from './path.js';
 
-type Return = { command: 'scan', options: {
-  o: 'file' | 'console',
-  output: 'file' | 'console',
-  d: string,
-  directory: string,
-}}
+type Return = {
+  command: 'scan';
+  options: {
+    o: 'file' | 'console';
+    output: 'file' | 'console';
+    d: string;
+    directory: string;
+  };
+};
 
 export const createProgram = (): Return => {
   const scanCommand: CommandModule = {
@@ -18,28 +21,27 @@ export const createProgram = (): Return => {
         alias: 'd',
         describe: 'Path to a different directory',
         type: 'string',
-        default: cwd()
+        default: cwd(),
       },
       output: {
         alias: 'o',
         describe: 'Output format',
         type: 'string',
         choices: ['file', 'console'],
-        default: 'file'
-      }
+        default: 'file',
+      },
     },
-    handler: (_) => {}
-  }
-
+    handler: (_) => {},
+  };
 
   const result = yargs(hideBin(process.argv))
-  .scriptName('spinne')
-  .command(scanCommand)
-  .help()
-  .parseSync()
+    .scriptName('spinne')
+    .command(scanCommand)
+    .help()
+    .parseSync();
 
-  const options = result as any;
+  const options = result as unknown as Return['options'];
   const command = result._[0] as 'scan';
 
-  return { options, command }
+  return { options, command };
 };

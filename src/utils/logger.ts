@@ -1,4 +1,4 @@
-import { pino, type Logger } from "pino";
+import { type Logger, pino } from 'pino';
 
 let logger: Logger;
 
@@ -11,13 +11,13 @@ export function initLogger(level = 'info', enabled = true) {
       options: {
         include: 'level',
       },
-    }
-  })
+    },
+  });
 }
 
 export function getLogger() {
   if (!logger) {
-    initLogger()
+    initLogger();
   }
-  return logger
+  return logger;
 }

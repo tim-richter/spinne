@@ -1,24 +1,24 @@
-import fs from "fs-extra";
-import { expect, it, vi } from "vitest";
-import type { DeepMockProxy } from "vitest-mock-extended";
-import { scan } from "../../src/scan.js";
-import { resolve } from "../../src/utils/path.js";
+import fs from 'fs-extra';
+import { expect, it, vi } from 'vitest';
+import type { DeepMockProxy } from 'vitest-mock-extended';
+import { scan } from '../../src/scan.js';
+import { resolve } from '../../src/utils/path.js';
 
-const cwdEmpty = resolve("fixtures/empty");
-const cwdSimple = resolve("fixtures/simple");
+const cwdEmpty = resolve('fixtures/empty');
+const cwdSimple = resolve('fixtures/simple');
 
-it("should create an empty report if no components were found", async () => {
-  vi.spyOn(fs, "writeJSON").mockImplementation(() => Promise.resolve());
+it('should create an empty report if no components were found', async () => {
+  vi.spyOn(fs, 'writeJSON').mockImplementation(() => Promise.resolve());
   const mockedFs = fs as unknown as DeepMockProxy<typeof fs>;
 
   await scan({ directory: cwdEmpty, d: cwdEmpty, o: 'file', output: 'file' });
 
   expect(mockedFs.writeJSON).toHaveBeenCalledTimes(1);
-  expect(mockedFs.writeJSON.mock.calls[0][1]).toMatchInlineSnapshot(`[]`);
+  expect(mockedFs.writeJSON.mock.calls[0][1]).toMatchInlineSnapshot('[]');
 });
 
-it("should create a basic report", async () => {
-  vi.spyOn(fs, "writeJSON").mockImplementation(() => Promise.resolve());
+it('should create a basic report', async () => {
+  vi.spyOn(fs, 'writeJSON').mockImplementation(() => Promise.resolve());
   const mockedFs = fs as unknown as DeepMockProxy<typeof fs>;
 
   await scan({ directory: cwdSimple, d: cwdSimple, o: 'file', output: 'file' });

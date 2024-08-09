@@ -1,4 +1,4 @@
-import ts, { type CompilerHost } from "typescript";
+import ts, { type CompilerHost } from 'typescript';
 
 export function analyzeProjectExports(
   rootFiles: string[],
@@ -21,7 +21,7 @@ export function analyzeProjectExports(
     ts.forEachChild(sourceFile, (node) => {
       if (ts.isExportAssignment(node)) {
         // Handle default exports
-        report.push("Default export:", node.expression.getText());
+        report.push('Default export:', node.expression.getText());
       } else if (
         ts.isExportDeclaration(node) &&
         node.exportClause &&

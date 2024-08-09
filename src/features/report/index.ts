@@ -1,11 +1,16 @@
-import { type TSESTree, parse } from "@typescript-eslint/typescript-estree";
-import { walk } from "estree-walker";
-import fs from "fs-extra";
+import {
+  type AST_NODE_TYPES,
+  type TSESTree,
+  parse,
+} from '@typescript-eslint/typescript-estree';
+import { walk } from 'estree-walker';
+import fs from 'fs-extra';
 
-import { join } from "../../utils/path.js";
-import { scan } from "./scan.js";
-import { isJSXAttribute, isJSXOpeningElement } from "./util.js";
-import { getLogger } from "../../utils/logger.js";
+import { join } from '../../utils/path.js';
+import { scan } from './scan.js';
+
+import { getLogger } from '../../utils/logger.js';
+import { isJSXAttribute, isJSXOpeningElement } from './util.js';
 
 interface ImportInfo {
   imported?: string;
@@ -30,7 +35,18 @@ interface Component {
       line: number;
     };
   };
-  props: Array<{ name: string; value: any }>;
+  props: Array<{
+    name: string;
+    value:
+      | AST_NODE_TYPES
+      | string
+      | number
+      | bigint
+      | boolean
+      | RegExp
+      | null
+      | undefined;
+  }>;
   propsSpread: boolean;
 }
 
@@ -58,28 +74,30 @@ type ImportsMap = Record<string, ImportsMapValue>;
 const getComponentNameFromAST = (
   nameObj: TSESTree.JSXTagNameExpression,
 ): string => {
-  if (nameObj.type === "JSXMemberExpression") {
+  if (nameObj.type === 'JSXMemberExpression') {
     return `${getComponentNameFromAST(
       nameObj.object,
     )}.${getComponentNameFromAST(nameObj.property)}`;
   }
 
-  if (nameObj.type === "JSXNamespacedName") {
+  if (nameObj.type === 'JSXNamespacedName') {
     return `${nameObj.namespace.name}.${nameObj.name.name}`;
   }
 
   return nameObj.name;
 };
 
-function getPropValue(node: TSESTree.JSXExpression | TSESTree.Literal | null) {
+function getPropValue(
+  node: TSESTree.JSXExpression | TSESTree.Literal | TSESTree.JSXElement | null,
+) {
   if (!node) return true;
 
-  if (node.type === "Literal") {
+  if (node.type === 'Literal') {
     return node.value;
   }
 
-  if (node.type === "JSXExpressionContainer") {
-    if (node.expression.type === "Literal") {
+  if (node.type === 'JSXExpressionContainer') {
+    if (node.expression.type === 'Literal') {
       return node.expression.value;
     }
 
@@ -110,10 +128,10 @@ function getInstanceInfo({ node, importInfo }: GetInstanceInfo): Component {
       const { name, value } = attribute;
 
       const propName = name.name;
-      const propValue = getPropValue(value as any);
+      const propValue = getPropValue(value);
 
       result.props.push({ name: propName.toString(), value: propValue });
-    } else if (attribute.type === "JSXSpreadAttribute") {
+    } else if (attribute.type === 'JSXSpreadAttribute') {
       result.propsSpread = true;
     }
   }
@@ -136,14 +154,14 @@ export function scanAST({ code, filePath }: ScanArgs): ScanResult {
   const importsMap: ImportsMap = {};
 
   walk(ast, {
-    enter(node: any) {
-      if (node.type === "ImportDeclaration") {
+    enter(node: TSESTree.Node) {
+      if (node.type === 'ImportDeclaration') {
         const { source, specifiers } = node as TSESTree.ImportDeclaration;
 
         const moduleName = source.value;
 
         for (const specifier of specifiers) {
-          if (specifier.type === "ImportSpecifier") {
+          if (specifier.type === 'ImportSpecifier') {
             const imported = specifier.imported.name;
             const local = specifier.local.name;
 
@@ -153,7 +171,7 @@ export function scanAST({ code, filePath }: ScanArgs): ScanResult {
               moduleName,
               importType: specifier.type,
             };
-          } else if (specifier.type === "ImportDefaultSpecifier") {
+          } else if (specifier.type === 'ImportDefaultSpecifier') {
             const local = specifier.local.name;
 
             importsMap[local] = {
@@ -173,7 +191,7 @@ export function scanAST({ code, filePath }: ScanArgs): ScanResult {
         }
       }
     },
-    leave(node: any) {
+    leave(node: TSESTree.Node) {
       if (isJSXOpeningElement(node)) {
         const { name } = node;
 
@@ -181,7 +199,7 @@ export function scanAST({ code, filePath }: ScanArgs): ScanResult {
 
         const nameFromAst = getComponentNameFromAST(name);
 
-        const nameParts = nameFromAst.split(".");
+        const nameParts = nameFromAst.split('.');
 
         const [firstPart] = nameParts;
 
@@ -200,19 +218,20 @@ export function scanAST({ code, filePath }: ScanArgs): ScanResult {
 
 export const makeReport = async (cwd: string) => {
   const files = scan(cwd);
-  getLogger().info(`Found ${files.length} files`)
+  getLogger().info(`Found ${files.length} files`);
 
   const report: Array<ScanResult> = [];
 
   for (const file of files) {
-    const code = fs.readFileSync(join(cwd, file), "utf8");
+    const code = fs.readFileSync(join(cwd, file), 'utf8');
 
     try {
       const scannedCode = scanAST({ code, filePath: file });
 
-      if (scannedCode && scannedCode.components && scannedCode.components.length > 1) report.push(scannedCode);
-    } catch(e) {
-      console.error(`Error while scanning file ${file}`, e)
+      if (scannedCode?.components && scannedCode.components.length > 1)
+        report.push(scannedCode);
+    } catch (e) {
+      console.error(`Error while scanning file ${file}`, e);
     }
   }
 

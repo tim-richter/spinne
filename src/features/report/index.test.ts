@@ -1,12 +1,12 @@
-import { describe, expect, it } from "vitest";
-import { resolve } from "../../utils/path.js";
-import { analyzeProjectExports } from "./exports.js";
-import { scanAST } from "./index.js";
+import { describe, expect, it } from 'vitest';
+import { resolve } from '../../utils/path.js';
+import { analyzeProjectExports } from './exports.js';
+import { scanAST } from './index.js';
 
-describe("exports", () => {
-  it("should scan exports from a index file correctly", () => {
+describe('exports', () => {
+  it('should scan exports from a index file correctly', () => {
     const result = analyzeProjectExports(
-      [resolve("fixtures/project-exports/simple/src/index.ts")],
+      [resolve('fixtures/project-exports/simple/src/index.ts')],
       { jsx: 4 },
     );
 
@@ -18,8 +18,8 @@ describe("exports", () => {
   });
 });
 
-describe("scanAST", () => {
-  it("should scan components correctly", () => {
+describe('scanAST', () => {
+  it('should scan components correctly', () => {
     const code = `
       import { Button } from 'my-library';
   
@@ -28,7 +28,7 @@ describe("scanAST", () => {
       }
     `;
 
-    const ast = scanAST({ code, filePath: "src/test/Component.tsx" });
+    const ast = scanAST({ code, filePath: 'src/test/Component.tsx' });
 
     expect(ast).toMatchInlineSnapshot(`
       {
@@ -65,7 +65,7 @@ describe("scanAST", () => {
     `);
   });
 
-  it("should scan components that have a js value as prop", () => {
+  it('should scan components that have a js value as prop', () => {
     const code = `
       import { Button } from 'my-library';
   
@@ -78,7 +78,7 @@ describe("scanAST", () => {
       }
     `;
 
-    const ast = scanAST({ code, filePath: "src/test/Component.tsx" });
+    const ast = scanAST({ code, filePath: 'src/test/Component.tsx' });
 
     expect(ast).toMatchInlineSnapshot(`
       {
@@ -119,7 +119,7 @@ describe("scanAST", () => {
     `);
   });
 
-  it("should set propsSpread to true if the component spreads its props", () => {
+  it('should set propsSpread to true if the component spreads its props', () => {
     const code = `
       import { Button } from 'my-library';
   
@@ -132,7 +132,7 @@ describe("scanAST", () => {
       }
     `;
 
-    const ast = scanAST({ code, filePath: "src/test/Component.tsx" });
+    const ast = scanAST({ code, filePath: 'src/test/Component.tsx' });
 
     expect(ast).toMatchInlineSnapshot(`
       {
@@ -169,7 +169,7 @@ describe("scanAST", () => {
     `);
   });
 
-  it("should get the correct component when spreading the component name", () => {
+  it('should get the correct component when spreading the component name', () => {
     const code = `
       import MyLibrary from 'my-library';
   
@@ -184,7 +184,7 @@ describe("scanAST", () => {
       }
     `;
 
-    const ast = scanAST({ code, filePath: "src/test/Component.tsx" });
+    const ast = scanAST({ code, filePath: 'src/test/Component.tsx' });
 
     expect(ast).toMatchInlineSnapshot(`
       {
@@ -215,7 +215,7 @@ describe("scanAST", () => {
     `);
   });
 
-  it("should only include jsx component imports in the report", () => {
+  it('should only include jsx component imports in the report', () => {
     const code = `
       import MyLibrary from 'my-library';
       import { bla } from '../bla';
@@ -232,7 +232,7 @@ describe("scanAST", () => {
       }
     `;
 
-    const ast = scanAST({ code, filePath: "src/test/Component.tsx" });
+    const ast = scanAST({ code, filePath: 'src/test/Component.tsx' });
 
     expect(ast).toMatchInlineSnapshot(`
       {
@@ -270,8 +270,8 @@ export const Code = ({ title, files, deps }: CodeProps) => {
     <SandpackCodeEditor wrapContent />
   )
 }
-`
-    const ast = scanAST({ code, filePath: "src/test/Component.tsx" });
+`;
+    const ast = scanAST({ code, filePath: 'src/test/Component.tsx' });
 
     expect(ast).toMatchInlineSnapshot(`
       {
@@ -299,10 +299,10 @@ export const Code = ({ title, files, deps }: CodeProps) => {
         ],
         "filePath": "src/test/Component.tsx",
       }
-    `)
-  })
+    `);
+  });
 
-  it("should parse literal values from JSXExpressionContainers", () => {
+  it('should parse literal values from JSXExpressionContainers', () => {
     const code = `
       import { Button } from 'my-library';
   
@@ -313,7 +313,7 @@ export const Code = ({ title, files, deps }: CodeProps) => {
       } 
     `;
 
-    const ast = scanAST({ code, filePath: "src/test/Component.tsx" });
+    const ast = scanAST({ code, filePath: 'src/test/Component.tsx' });
 
     expect(ast).toMatchInlineSnapshot(`
       {
@@ -354,7 +354,7 @@ export const Code = ({ title, files, deps }: CodeProps) => {
     `);
   });
 
-  it("should destructure the name of the component if it was used with dot syntax", () => {
+  it('should destructure the name of the component if it was used with dot syntax', () => {
     const code = `
       import MyLibrary from 'my-library';
       import { bla } from '../bla';
@@ -369,7 +369,7 @@ export const Code = ({ title, files, deps }: CodeProps) => {
       }
     `;
 
-    const ast = scanAST({ code, filePath: "src/test/Component.tsx" });
+    const ast = scanAST({ code, filePath: 'src/test/Component.tsx' });
 
     expect(ast).toMatchInlineSnapshot(`
       {
@@ -405,7 +405,7 @@ export const Code = ({ title, files, deps }: CodeProps) => {
     `);
   });
 
-  it("should scan jsx member expressions", () => {
+  it('should scan jsx member expressions', () => {
     const code = `
       export const CustomButton = ({ as }) => {
         const As = as || 'div'
@@ -414,7 +414,7 @@ export const Code = ({ title, files, deps }: CodeProps) => {
       }
     `;
 
-    const ast = scanAST({ code, filePath: "src/test/Component.tsx" });
+    const ast = scanAST({ code, filePath: 'src/test/Component.tsx' });
 
     expect(ast).toMatchInlineSnapshot(`
       {
@@ -445,7 +445,7 @@ export const Code = ({ title, files, deps }: CodeProps) => {
     `);
   });
 
-  it("should scan jsx namespaced name", () => {
+  it('should scan jsx namespaced name', () => {
     const code = `
       import * as mynamespace from 'my-namespace';
   
@@ -454,7 +454,7 @@ export const Code = ({ title, files, deps }: CodeProps) => {
       }
     `;
 
-    const ast = scanAST({ code, filePath: "src/test/Component.tsx" });
+    const ast = scanAST({ code, filePath: 'src/test/Component.tsx' });
 
     expect(ast).toMatchInlineSnapshot(`
       {

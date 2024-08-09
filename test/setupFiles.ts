@@ -1,5 +1,5 @@
-import { afterAll, afterEach, beforeAll, vi } from "vitest";
-import { server } from "../src/mocks/server";
+import { afterAll, afterEach, beforeAll, vi } from 'vitest';
+import { server } from '../src/mocks/server';
 
 process.exit = vi.fn();
 
