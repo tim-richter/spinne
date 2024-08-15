@@ -1,6 +1,8 @@
 [package]
 name = "spinne"
 version = "0.1.0"
+description = "spinne is a cli tool that analyzes your project code and finds information about prop usage and other design system analytics."
+license = "MIT"
 edition = "2021"
 
 [dependencies]
