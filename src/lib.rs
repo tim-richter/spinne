@@ -1,15 +1,30 @@
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
-use swc_common::FileName;
+use std::fs;
+use std::io;
+use swc_common::{errors::{ColorConfig, Handler}, FileName, SourceMap};
+use swc_common::sync::Lrc;
 use swc_ecma_loader::resolve::Resolve;
 use swc_ecma_loader::{resolvers::node::NodeModulesResolver, TargetEnv};
+use swc_ecma_parser::{lexer::Lexer, Parser, StringInput, Syntax, TsConfig};
+use std::collections::HashSet;
+use swc_ecma_visit::Visit;
 
 pub struct ProjectTraverser {
     resolver: Arc<NodeModulesResolver>,
+    source_map: Lrc<SourceMap>,
+    handler: Lrc<Handler>,
 }
 
 impl ProjectTraverser {
-    pub fn new(base_path: &Path) -> Self {
+    pub fn new() -> Self {
+        let source_map: Lrc<SourceMap> = Lrc::new(SourceMap::default());
+        let handler: Lrc<Handler> = Lrc::new(Handler::with_tty_emitter(
+            ColorConfig::Auto,
+            true,
+            false,
+            Some(source_map.clone()),
+        ));
         let resolver = NodeModulesResolver::new(
             TargetEnv::Node,
             Default::default(),
@@ -18,25 +33,30 @@ impl ProjectTraverser {
 
         Self {
             resolver: Arc::new(resolver),
+            source_map,
+            handler,
         }
     }
 
-    pub fn traverse(&self, entry_file: &Path) -> std::io::Result<()> {
-        let mut visited = std::collections::HashSet::new();
-        self.traverse_recursive(entry_file, &mut visited)
+    pub fn traverse(&self, entry_file: &Path) -> std::io::Result<HashSet<PathBuf>> {
+        let mut visited = HashSet::new();
+        self.traverse_recursive(entry_file, &mut visited)?;
+        Ok(visited)
     }
 
     fn traverse_recursive(&self, file_path: &Path, visited: &mut std::collections::HashSet<PathBuf>) -> std::io::Result<()> {
-        let canonical_path = file_path.canonicalize()?;
+        let canonical_path = file_path.canonicalize().map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))?;
         if !visited.insert(canonical_path.clone()) {
             return Ok(());
         }
 
         println!("Processing file: {:?}", canonical_path);
 
-        // Here you would typically load and parse the file
-        // For this example, we'll just simulate resolving imports
-        let imports = vec!["./some_module".to_string(), "external-package".to_string()];
+        // Read and parse the file content using swc
+        let content = fs::read_to_string(&canonical_path).map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))?;
+
+        // Use swc to parse the file
+        let imports = self.parse_imports(&content).map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))?;
 
         for import in imports {
             if let Ok(resolved) = self.resolver.resolve(&FileName::Real(canonical_path.clone()), &import) {
@@ -71,14 +91,41 @@ impl ProjectTraverser {
 
         Ok(())
     }
+
+    fn parse_imports(&self, content: &str) -> Result<Vec<String>, Box<dyn std::error::Error>> {
+        let lexer = Lexer::new(
+            Syntax::Typescript(TsConfig {
+                tsx: true,
+                ..Default::default()
+            }),
+            Default::default(),
+            StringInput::new(content, swc_common::BytePos(0), swc_common::BytePos(1)),
+            None,
+        );
+
+        let mut parser = Parser::new_from(lexer);
+        let module = parser
+            .parse_module()
+            .map_err(|e| {
+                e.into_diagnostic(&self.handler).emit();
+                "Failed to parse module".to_string()
+            })?;
+
+        // Visit the AST to extract import declarations
+        let mut visitor = ImportVisitor::default();
+        visitor.visit_module(&module);
+
+        Ok(visitor.imports)
+    }
 }
 
-fn main() -> std::io::Result<()> {
-    let base_path = Path::new("path/to/your/project");
-    let entry_file = base_path.join("entry_file.ts");
+#[derive(Default)]
+struct ImportVisitor {
+    pub imports: Vec<String>,
+}
 
-    let traverser = ProjectTraverser::new(base_path);
-    traverser.traverse(&entry_file)?;
-
-    Ok(())
+impl Visit for ImportVisitor {
+    fn visit_import_decl(&mut self, import_decl: &swc_ecma_ast::ImportDecl) {
+        self.imports.push(import_decl.src.value.to_string());
+    }
 }
