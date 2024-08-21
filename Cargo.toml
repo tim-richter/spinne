@@ -11,6 +11,8 @@ swc_ecma_ast = "0.118"
 swc_ecma_loader = { version = "0.49", features = ['node']}
 swc_ecma_visit = "0.104"
 swc_ecma_parser = { version = "0.149", features = ['typescript']}
+clap = { version = "4.5.16", features = ["derive"] }
+petgraph = { version = "0.6"}
 
 [dev-dependencies]
 tempfile = "3.2"
