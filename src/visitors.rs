@@ -349,4 +349,35 @@ mod tests {
         assert!(!usages.contains(&"div".to_string()));
         assert!(!usages.contains(&"span".to_string()));
     }
+
+    #[test]
+    fn test_detects_child_components() {
+        let code = r#"
+            function ParentComponent() {
+                return (
+                    <div>
+                        <ChildComponent1 />
+                        <ChildComponent2 />
+                    </div>
+                );
+            }
+
+            function ChildComponent1() {
+                return <div>Child 1</div>;
+            }
+
+            function ChildComponent2() {
+                return <div>Child 2</div>;
+            }
+        "#;
+
+        let module = parse_module(code);
+        let mut visitor = ComponentUsageVisitor::default();
+        visitor.visit_module(&module);
+
+        println!("{:?}", visitor.component_usages);
+        let usages = visitor.component_usages.get("ParentComponent").unwrap();
+        assert!(usages.contains(&"ChildComponent1".to_string()));
+        assert!(usages.contains(&"ChildComponent2".to_string()));
+    }
 }
