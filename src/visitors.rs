@@ -286,6 +286,27 @@ mod tests {
     }
 
     #[test]
+    fn test_detect_jsx_elements_with_fn() {
+        let code = r#"
+            function MyComponent() {
+                return (
+                    <div>
+                        <CustomComponent />
+                    </div>
+                );
+            }
+        "#;
+
+        let module = parse_module(code);
+        let mut visitor = ComponentUsageVisitor::default();
+        visitor.visit_module(&module);
+
+        println!("{:?}", visitor.component_usages);
+        let usages = visitor.component_usages.get("MyComponent").unwrap();
+        assert!(usages.contains(&"CustomComponent".to_string()));
+    }
+
+    #[test]
     fn test_exclude_base_elements() {
         let code = r#"
             const MyComponent = () => {
