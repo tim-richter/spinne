@@ -3,17 +3,6 @@ use swc_ecma_visit::{Visit, VisitWith};
 use std::collections::HashMap;
 
 #[derive(Default)]
-pub struct ImportVisitor {
-    pub imports: Vec<String>,
-}
-
-impl Visit for ImportVisitor {
-    fn visit_import_decl(&mut self, import_decl: &swc_ecma_ast::ImportDecl) {
-        self.imports.push(import_decl.src.value.to_string());
-    }
-}
-
-#[derive(Default)]
 pub struct ComponentUsageVisitor {
     pub component_usages: HashMap<String, Vec<String>>,
     current_component: Option<String>,
@@ -31,11 +20,12 @@ impl ComponentUsageVisitor {
         "sup", "time", "var", "wbr"
     ];
 
-    // Check if an identifier is a base HTML element
+    /// Checks if an identifier is a base HTML element.
     fn is_base_element(&self, ident: &Ident) -> bool {
         Self::BASE_ELEMENTS.contains(&ident.sym.as_ref())
     }
 
+    /// Checks if an expression contains JSX elements or fragments.
     fn contains_jsx(&self, expr: &Expr) -> bool {
         match expr {
             Expr::JSXElement(_) | Expr::JSXFragment(_) => true,
@@ -51,6 +41,7 @@ impl ComponentUsageVisitor {
         }
     }
 
+    /// Checks if a block statement contains JSX elements or fragments.
     fn contains_jsx_in_block(&self, block: &BlockStmt) -> bool {
         block.stmts.iter().any(|stmt| match stmt {
             Stmt::Return(ReturnStmt { arg: Some(expr), .. }) => self.contains_jsx(expr),
@@ -59,6 +50,7 @@ impl ComponentUsageVisitor {
         })
     }
 
+    /// Checks if a block statement uses React hooks.
     fn uses_react_hooks(&self, body: &BlockStmt) -> bool {
         body.stmts.iter().any(|stmt| match stmt {
             Stmt::Expr(ExprStmt { expr, .. }) => match &**expr {
@@ -75,6 +67,7 @@ impl ComponentUsageVisitor {
         })
     }
 
+    /// Determines if a function is a React component by checking for JSX or React hooks.
     fn is_react_component_function(&self, function: &Function) -> bool {
         if let Some(body) = &function.body {
             self.contains_jsx_in_block(body) || self.uses_react_hooks(body)
@@ -83,12 +76,13 @@ impl ComponentUsageVisitor {
         }
     }
 
+    /// Checks if an identifier is a potential component name (starts with an uppercase letter).
     fn is_potential_component_name(&self, ident: &Ident) -> bool {
         // Check if the name starts with an uppercase letter
         ident.sym.chars().next().map_or(false, |c| c.is_uppercase())
     }
 
-    // Check if the initializer expression is a React component
+    /// Checks if the initializer expression is a React component.
     fn is_react_component_expr(&self, expr: &Expr) -> bool {
         match expr {
             Expr::Fn(_) | Expr::Arrow(_) | Expr::JSXElement(_) => true,
@@ -106,7 +100,7 @@ impl ComponentUsageVisitor {
         }
     }
 
-    // Check if a class extends React.Component or React.PureComponent
+    /// Checks if a class extends React.Component or React.PureComponent.
     fn is_react_class_component(&self, class: &Class) -> bool {
         if let Some(super_class) = &class.super_class {
             match &**super_class {
@@ -130,6 +124,7 @@ impl ComponentUsageVisitor {
 }
 
 impl Visit for ComponentUsageVisitor {
+    /// Visits function declarations and checks if they are React components.
     fn visit_fn_decl(&mut self, n: &FnDecl) {
         if self.is_potential_component_name(&n.ident) && self.is_react_component_function(&n.function) {
             let component_name = n.ident.sym.to_string();
@@ -141,6 +136,7 @@ impl Visit for ComponentUsageVisitor {
         self.current_component = None;
     }
 
+    /// Visits variable declarators and checks if they are React components.
     fn visit_var_declarator(&mut self, n: &VarDeclarator) {
         if let Some(ident) = n.name.as_ident() {
             println!("Visiting VarDeclarator: {:?}", ident.sym);
@@ -161,6 +157,7 @@ impl Visit for ComponentUsageVisitor {
         self.current_component = None;
     }
 
+    /// Visits class declarations and checks if they are React components.
     fn visit_class_decl(&mut self, n: &ClassDecl) {
         println!("Visiting ClassDecl: {:?}", n.ident.sym);
         if self.is_potential_component_name(&n.ident) && self.is_react_class_component(&n.class) {
@@ -175,6 +172,7 @@ impl Visit for ComponentUsageVisitor {
         self.current_component = None;
     }
 
+    /// Visits JSX opening elements and records their usage within the current component.
     fn visit_jsx_opening_element(&mut self, n: &JSXOpeningElement) {
         println!("Visiting JSXOpeningElement: {:?}", n);
         if let Some(ref current_component) = self.current_component {

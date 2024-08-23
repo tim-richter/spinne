@@ -11,7 +11,20 @@ use swc_ecma_parser::{lexer::Lexer, Parser, StringInput, Syntax, TsSyntax};
 use petgraph::dot::{Dot, Config};
 use petgraph::graphmap::DiGraphMap;
 use swc_ecma_visit::Visit;
-use crate::visitors::{ImportVisitor, ComponentUsageVisitor};
+use crate::visitors::ComponentUsageVisitor;
+
+
+#[derive(Default)]
+pub struct ImportVisitor {
+    pub imports: Vec<String>,
+}
+
+impl Visit for ImportVisitor {
+    /// Visits import declarations and collects the import sources.
+    fn visit_import_decl(&mut self, import_decl: &swc_ecma_ast::ImportDecl) {
+        self.imports.push(import_decl.src.value.to_string());
+    }
+}
 
 pub struct ProjectTraverser {
     resolver: Arc<NodeModulesResolver>,
