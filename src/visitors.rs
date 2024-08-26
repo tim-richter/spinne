@@ -1,11 +1,14 @@
 use swc_ecma_ast::*;
 use swc_ecma_visit::{Visit, VisitWith};
-use std::collections::HashMap;
+use std::{collections::HashMap, path::Path};
 
 #[derive(Default)]
 pub struct ComponentUsageVisitor {
-    pub component_usages: HashMap<String, Vec<String>>,
+    pub component_usages: HashMap<String, Vec<(String, String)>>,
+    pub imports: Vec<String>,
     current_component: Option<String>,
+    file_path: String,
+    import_paths: HashMap<String, String>,
 }
 
 impl ComponentUsageVisitor {
@@ -19,6 +22,33 @@ impl ComponentUsageVisitor {
         "cite", "code", "figure", "figcaption", "mark", "small", "strong", "sub",
         "sup", "time", "var", "wbr"
     ];
+
+    pub fn new(file_path: String) -> Self {
+        Self {
+            file_path: Self::normalize_path(file_path),
+            ..Default::default()
+        }
+    }
+
+    /// Normalize the file path to an absolute path.
+    fn normalize_path(file_path: String) -> String {
+        Path::new(&file_path)
+            .canonicalize()
+            .unwrap_or_else(|_| Path::new(&file_path).to_path_buf())
+            .to_string_lossy()
+            .to_string()
+    }
+
+    /// Resolve the import path to the actual file path.
+    fn resolve_import_path(&self, import_path: &str) -> Option<String> {
+        let base_path = Path::new(&self.file_path).parent()?;
+        let full_path = base_path.join(import_path);
+        if full_path.exists() {
+            Some(Self::normalize_path(full_path.to_string_lossy().to_string()))
+        } else {
+            None
+        }
+    }
 
     /// Checks if an identifier is a base HTML element.
     fn is_base_element(&self, ident: &Ident) -> bool {
@@ -121,6 +151,10 @@ impl ComponentUsageVisitor {
         }
         false
     }
+
+    fn generate_component_key(&self, name: &str) -> String {
+        format!("{}:{}", self.file_path, name)
+    }
 }
 
 impl Visit for ComponentUsageVisitor {
@@ -128,8 +162,9 @@ impl Visit for ComponentUsageVisitor {
     fn visit_fn_decl(&mut self, n: &FnDecl) {
         if self.is_potential_component_name(&n.ident) && self.is_react_component_function(&n.function) {
             let component_name = n.ident.sym.to_string();
-            self.current_component = Some(component_name.clone());
-            self.component_usages.entry(component_name).or_default();
+            let component_key = self.generate_component_key(&component_name);
+            self.current_component = Some(component_key.clone());
+            self.component_usages.entry(component_key).or_default();
         }
 
         n.visit_children_with(self);
@@ -144,9 +179,10 @@ impl Visit for ComponentUsageVisitor {
                 if let Some(init) = &n.init {
                     if self.is_react_component_expr(init) {
                         let component_name = ident.sym.to_string();
-                        self.current_component = Some(component_name.clone());
-                        println!("Set current_component to {}", component_name);
-                        self.component_usages.entry(component_name).or_default();
+                        let component_key = self.generate_component_key(&component_name);
+                        self.current_component = Some(component_key.clone());
+                        println!("Set current_component to {}", component_key);
+                        self.component_usages.entry(component_key).or_default();
                     }
                 }
             }
@@ -162,14 +198,35 @@ impl Visit for ComponentUsageVisitor {
         println!("Visiting ClassDecl: {:?}", n.ident.sym);
         if self.is_potential_component_name(&n.ident) && self.is_react_class_component(&n.class) {
             let component_name = n.ident.sym.to_string();
-            self.current_component = Some(component_name.clone());
-            println!("Set current_component to {}", component_name);
-            self.component_usages.entry(component_name).or_default();
+            let component_key = self.generate_component_key(&component_name);
+            self.current_component = Some(component_key.clone());
+            println!("Set current_component to {}", component_key);
+            self.component_usages.entry(component_key).or_default();
         }
 
         n.visit_children_with(self);
 
         self.current_component = None;
+    }
+
+    /// Visits import declarations and resolves the actual file path of the imported component.
+    fn visit_import_decl(&mut self, n: &ImportDecl) {
+        self.imports.push(n.src.value.to_string());
+        for specifier in &n.specifiers {
+            if let ImportSpecifier::Named(named_specifier) = specifier {
+                let imported_name = named_specifier.local.sym.to_string();
+                if self.is_potential_component_name(&named_specifier.local) {
+                    if let Some(resolved_path) = self.resolve_import_path(&n.src.value) {
+                        self.import_paths.insert(imported_name.clone(), resolved_path.clone());
+                        let component_key = self.generate_component_key(&imported_name);
+                        self.component_usages.entry(component_key).or_default();
+                        println!("Resolved import {} to {}", imported_name, resolved_path);
+                    }
+                }
+            }
+        }
+
+        n.visit_children_with(self);
     }
 
     /// Visits JSX opening elements and records their usage within the current component.
@@ -179,10 +236,12 @@ impl Visit for ComponentUsageVisitor {
             if let JSXElementName::Ident(ident) = &n.name {
                 if !self.is_base_element(ident) {
                     let component_name = ident.sym.to_string();
+                    let component_key = self.generate_component_key(&component_name);
+                    let import_path = self.import_paths.get(&component_name).cloned().unwrap_or_else(|| self.file_path.clone());
                     self.component_usages
                         .entry(current_component.clone())
                         .or_default()
-                        .push(component_name.clone());
+                        .push((component_key, import_path));
                     println!("Added usage of {} in {}", component_name, current_component);
                 }
             }
@@ -196,7 +255,6 @@ impl Visit for ComponentUsageVisitor {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use swc_ecma_ast::Module;
     use swc_ecma_parser::{lexer::Lexer, Parser, StringInput, Syntax, TsSyntax};
 
     fn parse_module(code: &str) -> Module {
@@ -227,7 +285,8 @@ mod tests {
         visitor.visit_module(&module);
 
         println!("{:?}", visitor.component_usages);
-        assert!(visitor.component_usages.contains_key("MyComponent"));
+        let component_key = format!("{}:MyComponent", visitor.file_path);
+        assert!(visitor.component_usages.contains_key(&component_key));
     }
 
     #[test]
@@ -243,7 +302,8 @@ mod tests {
         visitor.visit_module(&module);
 
         println!("{:?}", visitor.component_usages);
-        assert!(visitor.component_usages.contains_key("MyComponent"));
+        let component_key = format!("{}:MyComponent", visitor.file_path);
+        assert!(visitor.component_usages.contains_key(&component_key));
     }
 
     #[test]
@@ -261,7 +321,8 @@ mod tests {
         visitor.visit_module(&module);
 
         println!("{:?}", visitor.component_usages);
-        assert!(visitor.component_usages.contains_key("MyComponent"));
+        let component_key = format!("{}:MyComponent", visitor.file_path);
+        assert!(visitor.component_usages.contains_key(&component_key));
     }
 
     #[test]
@@ -281,8 +342,10 @@ mod tests {
         visitor.visit_module(&module);
 
         println!("{:?}", visitor.component_usages);
-        let usages = visitor.component_usages.get("MyComponent").unwrap();
-        assert!(usages.contains(&"CustomComponent".to_string()));
+        let component_key = format!("{}:MyComponent", visitor.file_path);
+        let usages = visitor.component_usages.get(&component_key).unwrap();
+        let custom_component_key = format!("{}:CustomComponent", visitor.file_path);
+        assert!(usages.contains(&(custom_component_key.clone(), visitor.file_path.clone())));
     }
 
     #[test]
@@ -302,8 +365,10 @@ mod tests {
         visitor.visit_module(&module);
 
         println!("{:?}", visitor.component_usages);
-        let usages = visitor.component_usages.get("MyComponent").unwrap();
-        assert!(usages.contains(&"CustomComponent".to_string()));
+        let component_key = format!("{}:MyComponent", visitor.file_path);
+        let usages = visitor.component_usages.get(&component_key).unwrap();
+        let custom_component_key = format!("{}:CustomComponent", visitor.file_path);
+        assert!(usages.contains(&(custom_component_key.clone(), visitor.file_path.clone())));
     }
 
     #[test]
@@ -323,9 +388,10 @@ mod tests {
         visitor.visit_module(&module);
 
         println!("{:?}", visitor.component_usages);
-        let usages = visitor.component_usages.get("MyComponent").unwrap();
-        assert!(!usages.contains(&"div".to_string()));
-        assert!(!usages.contains(&"span".to_string()));
+        let component_key = format!("{}:MyComponent", visitor.file_path);
+        let usages = visitor.component_usages.get(&component_key).unwrap();
+        assert!(!usages.iter().any(|(key, _)| key == "div"));
+        assert!(!usages.iter().any(|(key, _)| key == "span"));
     }
 
     #[test]
@@ -345,9 +411,10 @@ mod tests {
         visitor.visit_module(&module);
 
         println!("{:?}", visitor.component_usages);
-        let usages = visitor.component_usages.get("MyComponent").unwrap();
-        assert!(!usages.contains(&"div".to_string()));
-        assert!(!usages.contains(&"span".to_string()));
+        let component_key = format!("{}:MyComponent", visitor.file_path);
+        let usages = visitor.component_usages.get(&component_key).unwrap();
+        assert!(!usages.iter().any(|(key, _)| key == "div"));
+        assert!(!usages.iter().any(|(key, _)| key == "span"));
     }
 
     #[test]
@@ -376,8 +443,11 @@ mod tests {
         visitor.visit_module(&module);
 
         println!("{:?}", visitor.component_usages);
-        let usages = visitor.component_usages.get("ParentComponent").unwrap();
-        assert!(usages.contains(&"ChildComponent1".to_string()));
-        assert!(usages.contains(&"ChildComponent2".to_string()));
+        let parent_component_key = format!("{}:ParentComponent", visitor.file_path);
+        let usages = visitor.component_usages.get(&parent_component_key).unwrap();
+        let child_component1_key = format!("{}:ChildComponent1", visitor.file_path);
+        let child_component2_key = format!("{}:ChildComponent2", visitor.file_path);
+        assert!(usages.contains(&(child_component1_key.clone(), visitor.file_path.clone())));
+        assert!(usages.contains(&(child_component2_key.clone(), visitor.file_path.clone())));
     }
 }

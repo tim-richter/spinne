@@ -1,6 +1,6 @@
 use petgraph::prelude::DiGraphMap;
 use petgraph::dot::{Dot, Config};
-use spinne::ProjectTraverser; // Replace `my_crate` with your crate's name
+use spinne::ProjectTraverser;
 use std::collections::HashSet;
 use std::fs::File;
 use std::io::Write;
@@ -217,6 +217,77 @@ fn test_project_traverser_graph_output() {
                 import React from 'react';
 
                 const ChildComponent = () => {{
+                    return <div>Child Component</div>;
+                }};
+
+                export default ChildComponent;
+            "#
+    )
+        .unwrap();
+
+    // Traverse the project and capture the graph output
+    let traverser = ProjectTraverser::new();
+    let (_bla, graph) = traverser.traverse(&entry_path).unwrap();
+
+    // Manually create the expected DOT graph output
+    let mut expected_graph = DiGraphMap::new();
+    expected_graph.add_edge("App", "ChildComponent", ());
+
+    let expected_dot = format!("{:?}", Dot::with_config(&expected_graph, &[Config::EdgeNoLabel]));
+
+    // Assert that the output matches the expected graph
+    assert_eq!(graph, expected_dot);
+}
+
+#[test]
+fn test_project_traverser_graph_output_with_unique_components() {
+    // Create a temporary directory to simulate a project
+    let dir = tempfile::tempdir().unwrap();
+    let dir_path = dir.path();
+
+    // Create a simple React component structure
+    let entry_path = dir_path.join("App.tsx");
+
+    let component_dir = dir_path.join("components");
+    std::fs::create_dir(&component_dir).unwrap();
+    let barrel_path = component_dir.join("index.ts");
+    let child_path = component_dir.join("ChildComponent.tsx");
+
+    // Write the entry file
+    let mut entry_file = File::create(&entry_path).unwrap();
+    write!(
+        entry_file,
+        r#"
+                import React from 'react';
+                import {{ ChildComponent }} from './components';
+
+                const App = () => {{
+                    return <ChildComponent />;
+                }}
+
+                export default App;
+            "#
+    )
+        .unwrap();
+
+    // Write the barrel file
+    let mut barrel_file = File::create(&barrel_path).unwrap();
+    write!(
+        barrel_file,
+        r#"
+                export {{ ChildComponent }} from './ChildComponent';
+            "#
+    )
+        .unwrap();
+
+    // Write the child component file
+    let mut child_file = File::create(&child_path).unwrap();
+    write!(
+        child_file,
+        r#"
+                import React from 'react';
+
+                export const ChildComponent = () => {{
                     return <div>Child Component</div>;
                 }};
 

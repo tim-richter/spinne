@@ -13,19 +13,6 @@ use petgraph::graphmap::DiGraphMap;
 use swc_ecma_visit::Visit;
 use crate::visitors::ComponentUsageVisitor;
 
-
-#[derive(Default)]
-pub struct ImportVisitor {
-    pub imports: Vec<String>,
-}
-
-impl Visit for ImportVisitor {
-    /// Visits import declarations and collects the import sources.
-    fn visit_import_decl(&mut self, import_decl: &swc_ecma_ast::ImportDecl) {
-        self.imports.push(import_decl.src.value.to_string());
-    }
-}
-
 pub struct ProjectTraverser {
     resolver: Arc<NodeModulesResolver>,
     handler: Lrc<Handler>,
@@ -52,80 +39,49 @@ impl ProjectTraverser {
         }
     }
 
-    pub fn traverse(&self, entry_file: &Path) -> std::io::Result<(HashSet<PathBuf>, String)> {
+    pub fn traverse(&self, entry_point: &Path) -> io::Result<(HashSet<PathBuf>, String)> {
         let mut visited = HashSet::new();
         let mut component_graph = HashMap::new();
-        self.traverse_recursive(entry_file, &mut visited, &mut component_graph)?;
+        self.traverse_recursive(entry_point, &mut visited, &mut component_graph)?;
 
-        let graph = ProjectTraverser::build_and_render_graph(&component_graph);
+        let graph = self.create_graph(&component_graph);
         Ok((visited, graph))
     }
 
-    pub fn build_and_render_graph(component_graph: &HashMap<String, Vec<String>>) -> String {
-        let mut graph = DiGraphMap::new();
-
-        for (component, children) in component_graph {
-            for child in children {
-                graph.add_edge(component, child, ());
-            }
-        }
-
-        format!("{:?}", Dot::with_config(&graph, &[Config::EdgeNoLabel]))
-    }
-
-    fn traverse_recursive(&self, file_path: &Path, visited: &mut HashSet<PathBuf>, component_graph: &mut HashMap<String, Vec<String>>) -> std::io::Result<()> {
-        let canonical_path = file_path.canonicalize().map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))?;
+    fn traverse_recursive(&self, file_path: &Path, visited: &mut HashSet<PathBuf>, component_graph: &mut HashMap<String, Vec<String>>) -> io::Result<()> {
+        let canonical_path = file_path.canonicalize()?;
         if !visited.insert(canonical_path.clone()) {
+            // File already visited, no need to process again
             return Ok(());
         }
-
+    
         println!("Processing file: {:?}", canonical_path);
-
-        // Read and parse the file content using swc
-        let content = fs::read_to_string(&canonical_path).map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))?;
-
-        // Use swc to parse the file
-        let (imports, components) = self.parse_imports(&content).map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))?;
-
-        for (component, children) in components {
-            component_graph.entry(component).or_default().extend(children);
+    
+        let content = fs::read_to_string(&canonical_path)?;
+        let (component_usages, imports) = self.parse_file(&content)?;
+    
+        for (component, usages) in component_usages {
+            let component_name = component.split(':').last().unwrap_or(&component).to_string();
+            for (used_component, _) in usages {
+                let used_component_name = used_component.split(':').last().unwrap_or(&used_component).to_string();
+                component_graph.entry(component_name.clone()).or_default().push(used_component_name);
+            }
         }
-
+    
+        // Follow imports
         for import in imports {
             if let Ok(resolved) = self.resolver.resolve(&FileName::Real(canonical_path.clone()), &import) {
-                match resolved.filename {
-                    FileName::Real(ref resolved_path) => {
-                        // Resolved to a local file path, so continue traversing
-                        self.traverse_recursive(resolved_path, visited, component_graph)?;
-                    }
-                    FileName::Url(ref url) => {
-                        println!("Resolved to URL: {}", url);
-                        // Handle URLs if necessary
-                    }
-                    FileName::Macros(ref macro_name) => {
-                        println!("Resolved to macro: {}", macro_name);
-                        // Handle macro source, if relevant to your use case
-                    }
-                    FileName::QuoteExpansion | FileName::Anon | FileName::MacroExpansion | FileName::ProcMacroSourceCode => {
-                        println!("Resolved to an internal or generated source: {:?}", resolved.filename);
-                        // Handle or log these cases as needed
-                    }
-                    FileName::Internal(ref description) => {
-                        println!("Resolved to an internal source: {}", description);
-                        // Handle internal sources if necessary
-                    }
-                    FileName::Custom(ref custom_name) => {
-                        println!("Resolved to a custom source: {}", custom_name);
-                        // Handle custom sources if necessary
-                    }
+                if let FileName::Real(ref resolved_path) = resolved.filename {
+                    println!("Resolved path: {:?}", resolved_path);
+                    self.traverse_recursive(resolved_path, visited, component_graph)?;
                 }
             }
         }
-
+    
         Ok(())
     }
 
-    fn parse_imports(&self, content: &str) -> Result<(Vec<String>, HashMap<String, Vec<String>>), Box<dyn std::error::Error>> {
+    fn parse_file(&self, content: &str) -> io::Result<(HashMap<String, Vec<(String, String)>>, Vec<String>)> {
         let lexer = Lexer::new(
             Syntax::Typescript(TsSyntax {
                 tsx: true,
@@ -141,16 +97,22 @@ impl ProjectTraverser {
             .parse_module()
             .map_err(|e| {
                 e.into_diagnostic(&self.handler).emit();
-                "Failed to parse module".to_string()
+                io::Error::new(io::ErrorKind::Other, "Failed to parse module")
             })?;
 
-        // Visit the AST to extract import declarations
-        let mut import_visitor = ImportVisitor::default();
-        import_visitor.visit_module(&module);
+        let mut visitor = ComponentUsageVisitor::default();
+        visitor.visit_module(&module);
 
-        let mut component_visitor = ComponentUsageVisitor::default();
-        component_visitor.visit_module(&module);
+        Ok((visitor.component_usages, visitor.imports))
+    }
 
-        Ok((import_visitor.imports, component_visitor.component_usages))
+    fn create_graph(&self, component_graph: &HashMap<String, Vec<String>>) -> String {
+        let mut graph = DiGraphMap::new();
+        for (component, usages) in component_graph {
+            for used_component in usages {
+                graph.add_edge(component, used_component, ());
+            }
+        }
+        format!("{:?}", Dot::with_config(&graph, &[Config::EdgeNoLabel]))
     }
 }
