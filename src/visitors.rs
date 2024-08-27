@@ -3,15 +3,15 @@ use swc_ecma_visit::{Visit, VisitWith};
 use std::{collections::HashMap, path::Path};
 
 #[derive(Default)]
-pub struct ComponentUsageVisitor {
-    pub component_usages: HashMap<String, Vec<(String, String)>>,
+pub struct FileVisitor {
+    pub component_usages: HashMap<String, Vec<(String, String, String)>>,
     pub imports: Vec<String>,
     current_component: Option<String>,
     file_path: String,
     import_paths: HashMap<String, String>,
 }
 
-impl ComponentUsageVisitor {
+impl FileVisitor {
     // List of standard HTML elements to exclude
     const BASE_ELEMENTS: &'static [&'static str] = &[
         "div", "span", "p", "a", "ul", "li", "h1", "h2", "h3", "h4", "h5", "h6", 
@@ -155,9 +155,17 @@ impl ComponentUsageVisitor {
     fn generate_component_key(&self, name: &str) -> String {
         format!("{}:{}", self.file_path, name)
     }
+
+    fn add_component_usage(&mut self, component_key: String, used_component_key: String, import_path: String) {
+        let origin = self.file_path.clone();
+        self.component_usages
+            .entry(component_key)
+            .or_default()
+            .push((used_component_key, import_path, origin));
+    }
 }
 
-impl Visit for ComponentUsageVisitor {
+impl Visit for FileVisitor {
     /// Visits function declarations and checks if they are React components.
     fn visit_fn_decl(&mut self, n: &FnDecl) {
         if self.is_potential_component_name(&n.ident) && self.is_react_component_function(&n.function) {
@@ -213,40 +221,38 @@ impl Visit for ComponentUsageVisitor {
     fn visit_import_decl(&mut self, n: &ImportDecl) {
         self.imports.push(n.src.value.to_string());
         for specifier in &n.specifiers {
-            if let ImportSpecifier::Named(named_specifier) = specifier {
-                let imported_name = named_specifier.local.sym.to_string();
-                if self.is_potential_component_name(&named_specifier.local) {
-                    if let Some(resolved_path) = self.resolve_import_path(&n.src.value) {
-                        self.import_paths.insert(imported_name.clone(), resolved_path.clone());
-                        let component_key = self.generate_component_key(&imported_name);
-                        self.component_usages.entry(component_key).or_default();
-                        println!("Resolved import {} to {}", imported_name, resolved_path);
+            match specifier {
+                ImportSpecifier::Named(named_specifier) => {
+                    let imported_name = named_specifier.local.sym.to_string();
+                    if self.is_potential_component_name(&named_specifier.local) {
+                        self.import_paths.insert(imported_name, n.src.value.to_string());
                     }
                 }
+                ImportSpecifier::Default(default_specifier) => {
+                    let imported_name = default_specifier.local.sym.to_string();
+                    if self.is_potential_component_name(&default_specifier.local) {
+                        self.import_paths.insert(imported_name, n.src.value.to_string());
+                    }
+                }
+                _ => {}
             }
         }
-
         n.visit_children_with(self);
     }
 
     /// Visits JSX opening elements and records their usage within the current component.
     fn visit_jsx_opening_element(&mut self, n: &JSXOpeningElement) {
-        println!("Visiting JSXOpeningElement: {:?}", n);
         if let Some(ref current_component) = self.current_component {
             if let JSXElementName::Ident(ident) = &n.name {
                 if !self.is_base_element(ident) {
                     let component_name = ident.sym.to_string();
                     let component_key = self.generate_component_key(&component_name);
-                    let import_path = self.import_paths.get(&component_name).cloned().unwrap_or_else(|| self.file_path.clone());
-                    self.component_usages
-                        .entry(current_component.clone())
-                        .or_default()
-                        .push((component_key, import_path));
-                    println!("Added usage of {} in {}", component_name, current_component);
+                    let import_path = self.import_paths.get(&component_name)
+                        .cloned()
+                        .unwrap_or_else(|| self.file_path.clone());
+                    self.add_component_usage(current_component.clone(), component_key, import_path);
                 }
             }
-        } else {
-            println!("current_component is None when visiting JSXOpeningElement");
         }
         n.visit_children_with(self);
     }
@@ -281,7 +287,7 @@ mod tests {
         "#;
 
         let module = parse_module(code);
-        let mut visitor = ComponentUsageVisitor::default();
+        let mut visitor = FileVisitor::default();
         visitor.visit_module(&module);
 
         println!("{:?}", visitor.component_usages);
@@ -298,7 +304,7 @@ mod tests {
         "#;
 
         let module = parse_module(code);
-        let mut visitor = ComponentUsageVisitor::default();
+        let mut visitor = FileVisitor::default();
         visitor.visit_module(&module);
 
         println!("{:?}", visitor.component_usages);
@@ -317,7 +323,7 @@ mod tests {
         "#;
 
         let module = parse_module(code);
-        let mut visitor = ComponentUsageVisitor::default();
+        let mut visitor = FileVisitor::default();
         visitor.visit_module(&module);
 
         println!("{:?}", visitor.component_usages);
@@ -338,14 +344,17 @@ mod tests {
         "#;
 
         let module = parse_module(code);
-        let mut visitor = ComponentUsageVisitor::default();
+        let mut visitor = FileVisitor::new("test_file.tsx".to_string());
         visitor.visit_module(&module);
 
-        println!("{:?}", visitor.component_usages);
         let component_key = format!("{}:MyComponent", visitor.file_path);
         let usages = visitor.component_usages.get(&component_key).unwrap();
         let custom_component_key = format!("{}:CustomComponent", visitor.file_path);
-        assert!(usages.contains(&(custom_component_key.clone(), visitor.file_path.clone())));
+        assert!(usages.iter().any(|(key, path, origin)| 
+            key == &custom_component_key && 
+            path == &visitor.file_path && 
+            origin == &visitor.file_path
+        ));
     }
 
     #[test]
@@ -361,14 +370,17 @@ mod tests {
         "#;
 
         let module = parse_module(code);
-        let mut visitor = ComponentUsageVisitor::default();
+        let mut visitor = FileVisitor::new("test_file.tsx".to_string());
         visitor.visit_module(&module);
 
-        println!("{:?}", visitor.component_usages);
         let component_key = format!("{}:MyComponent", visitor.file_path);
         let usages = visitor.component_usages.get(&component_key).unwrap();
         let custom_component_key = format!("{}:CustomComponent", visitor.file_path);
-        assert!(usages.contains(&(custom_component_key.clone(), visitor.file_path.clone())));
+        assert!(usages.iter().any(|(key, path, origin)| 
+            key == &custom_component_key && 
+            path == &visitor.file_path && 
+            origin == &visitor.file_path
+        ));
     }
 
     #[test]
@@ -384,14 +396,13 @@ mod tests {
         "#;
 
         let module = parse_module(code);
-        let mut visitor = ComponentUsageVisitor::default();
+        let mut visitor = FileVisitor::default();
         visitor.visit_module(&module);
 
-        println!("{:?}", visitor.component_usages);
         let component_key = format!("{}:MyComponent", visitor.file_path);
         let usages = visitor.component_usages.get(&component_key).unwrap();
-        assert!(!usages.iter().any(|(key, _)| key == "div"));
-        assert!(!usages.iter().any(|(key, _)| key == "span"));
+        assert!(!usages.iter().any(|(key, _, _)| key == "div"));
+        assert!(!usages.iter().any(|(key, _, _)| key == "span"));
     }
 
     #[test]
@@ -407,14 +418,13 @@ mod tests {
         "#;
 
         let module = parse_module(code);
-        let mut visitor = ComponentUsageVisitor::default();
+        let mut visitor = FileVisitor::default();
         visitor.visit_module(&module);
 
-        println!("{:?}", visitor.component_usages);
         let component_key = format!("{}:MyComponent", visitor.file_path);
         let usages = visitor.component_usages.get(&component_key).unwrap();
-        assert!(!usages.iter().any(|(key, _)| key == "div"));
-        assert!(!usages.iter().any(|(key, _)| key == "span"));
+        assert!(!usages.iter().any(|(key, _, _)| key == "div"));
+        assert!(!usages.iter().any(|(key, _, _)| key == "span"));
     }
 
     #[test]
@@ -439,15 +449,58 @@ mod tests {
         "#;
 
         let module = parse_module(code);
-        let mut visitor = ComponentUsageVisitor::default();
+        let mut visitor = FileVisitor::default();
         visitor.visit_module(&module);
 
-        println!("{:?}", visitor.component_usages);
         let parent_component_key = format!("{}:ParentComponent", visitor.file_path);
         let usages = visitor.component_usages.get(&parent_component_key).unwrap();
         let child_component1_key = format!("{}:ChildComponent1", visitor.file_path);
         let child_component2_key = format!("{}:ChildComponent2", visitor.file_path);
-        assert!(usages.contains(&(child_component1_key.clone(), visitor.file_path.clone())));
-        assert!(usages.contains(&(child_component2_key.clone(), visitor.file_path.clone())));
+        assert!(usages.iter().any(|(key, path, origin)| 
+            key == &child_component1_key && 
+            path == &visitor.file_path && 
+            origin == &visitor.file_path
+        ));
+        assert!(usages.iter().any(|(key, path, origin)| 
+            key == &child_component2_key && 
+            path == &visitor.file_path && 
+            origin == &visitor.file_path
+        ));
+    }
+
+    #[test]
+    fn test_detects_child_components_in_imported_file() {
+        let code = r#"
+            import ChildComponent1 from './ChildComponent1';
+            import ChildComponent2 from './ChildComponent2';
+
+            function ParentComponent() {
+                return (
+                    <div>
+                        <ChildComponent1 />
+                        <ChildComponent2 />
+                    </div>
+                );
+            }
+        "#;
+        let module = parse_module(code);
+        let mut visitor = FileVisitor::default();
+        visitor.visit_module(&module);
+
+        let parent_component_key = format!("{}:ParentComponent", visitor.file_path);
+        let usages = visitor.component_usages.get(&parent_component_key).unwrap();
+        let child_component1_key = format!("{}:ChildComponent1", visitor.file_path);
+        let child_component2_key = format!("{}:ChildComponent2", visitor.file_path);
+        println!("{:?}", usages);
+        assert!(usages.iter().any(|(key, path, origin)| 
+            key == &child_component1_key && 
+            path == "./ChildComponent1" && 
+            origin == &visitor.file_path
+        ));
+        assert!(usages.iter().any(|(key, path, origin)| 
+            key == &child_component2_key && 
+            path == "./ChildComponent2" && 
+            origin == &visitor.file_path
+        ));
     }
 }

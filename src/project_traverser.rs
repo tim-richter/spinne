@@ -11,7 +11,7 @@ use swc_ecma_parser::{lexer::Lexer, Parser, StringInput, Syntax, TsSyntax};
 use petgraph::dot::{Dot, Config};
 use petgraph::graphmap::DiGraphMap;
 use swc_ecma_visit::Visit;
-use crate::visitors::ComponentUsageVisitor;
+use crate::visitors::FileVisitor;
 
 pub struct ProjectTraverser {
     resolver: Arc<NodeModulesResolver>,
@@ -48,7 +48,7 @@ impl ProjectTraverser {
         Ok((visited, graph))
     }
 
-    fn traverse_recursive(&self, file_path: &Path, visited: &mut HashSet<PathBuf>, component_graph: &mut HashMap<String, Vec<String>>) -> io::Result<()> {
+    fn traverse_recursive(&self, file_path: &Path, visited: &mut HashSet<PathBuf>, component_graph: &mut HashMap<String, Vec<(String, String)>>) -> io::Result<()> {
         let canonical_path = file_path.canonicalize()?;
         if !visited.insert(canonical_path.clone()) {
             // File already visited, no need to process again
@@ -62,9 +62,9 @@ impl ProjectTraverser {
     
         for (component, usages) in component_usages {
             let component_name = component.split(':').last().unwrap_or(&component).to_string();
-            for (used_component, _) in usages {
+            for (used_component, used_path, _) in usages {
                 let used_component_name = used_component.split(':').last().unwrap_or(&used_component).to_string();
-                component_graph.entry(component_name.clone()).or_default().push(used_component_name);
+                component_graph.entry(component_name.clone()).or_default().push((used_component_name, used_path));
             }
         }
     
@@ -81,7 +81,7 @@ impl ProjectTraverser {
         Ok(())
     }
 
-    fn parse_file(&self, content: &str) -> io::Result<(HashMap<String, Vec<(String, String)>>, Vec<String>)> {
+    fn parse_file(&self, content: &str) -> io::Result<(HashMap<String, Vec<(String, String, String)>>, Vec<String>)> {
         let lexer = Lexer::new(
             Syntax::Typescript(TsSyntax {
                 tsx: true,
@@ -100,16 +100,16 @@ impl ProjectTraverser {
                 io::Error::new(io::ErrorKind::Other, "Failed to parse module")
             })?;
 
-        let mut visitor = ComponentUsageVisitor::default();
+        let mut visitor = FileVisitor::default();
         visitor.visit_module(&module);
 
         Ok((visitor.component_usages, visitor.imports))
     }
 
-    fn create_graph(&self, component_graph: &HashMap<String, Vec<String>>) -> String {
+    fn create_graph(&self, component_graph: &HashMap<String, Vec<(String, String)>>) -> String {
         let mut graph = DiGraphMap::new();
         for (component, usages) in component_graph {
-            for used_component in usages {
+            for (used_component, _) in usages {
                 graph.add_edge(component, used_component, ());
             }
         }
