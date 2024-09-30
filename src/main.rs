@@ -1,21 +1,35 @@
 use clap::Parser;
+use std::path::PathBuf;
+use spinne::ProjectTraverser;
 
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
 struct Args {
-    /// Name of the person to greet
+    /// Entry point file
     #[arg(short, long)]
-    name: String,
+    entry: PathBuf,
 
-    /// Number of times to greet
-    #[arg(short, long, default_value_t = 1)]
-    count: u8,
+    /// Output file for the report
+    #[arg(short, long)]
+    output: Option<PathBuf>,
 }
 
-fn main() {
+fn main() -> std::io::Result<()> {
     let args = Args::parse();
 
-    for _ in 0..args.count {
-        println!("Hello {}!", args.name);
+    let traverser = ProjectTraverser::new();
+    let component_graph = traverser.traverse(&args.entry)?;
+
+    println!("Component Graph:");
+    println!("{}", component_graph.generate_dot());
+
+    println!("\nComponent Report:");
+    let report = component_graph.generate_report();
+    println!("{}", report);
+
+    if let Some(output_path) = args.output {
+        std::fs::write(output_path, report)?;
     }
+
+    Ok(())
 }

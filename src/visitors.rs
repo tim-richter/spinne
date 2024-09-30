@@ -1,17 +1,18 @@
 use swc_ecma_ast::*;
 use swc_ecma_visit::{Visit, VisitWith};
 use std::{collections::HashMap, path::Path};
+use crate::component_graph::ComponentGraph;
+use std::path::PathBuf;
 
-#[derive(Default)]
-pub struct FileVisitor {
-    pub component_usages: HashMap<String, Vec<(String, String, String)>>,
+pub struct FileVisitor<'a> {
+    pub component_graph: &'a mut ComponentGraph,
     pub imports: Vec<String>,
     current_component: Option<String>,
-    file_path: String,
+    file_path: PathBuf,
     import_paths: HashMap<String, String>,
 }
 
-impl FileVisitor {
+impl<'a> FileVisitor<'a> {
     // List of standard HTML elements to exclude
     const BASE_ELEMENTS: &'static [&'static str] = &[
         "div", "span", "p", "a", "ul", "li", "h1", "h2", "h3", "h4", "h5", "h6", 
@@ -23,10 +24,14 @@ impl FileVisitor {
         "sup", "time", "var", "wbr"
     ];
 
-    pub fn new(file_path: String) -> Self {
+    pub fn new(file_path: String, component_graph: &'a mut ComponentGraph) -> Self {
+        println!("Creating FileVisitor for {}", file_path);
         Self {
-            file_path: Self::normalize_path(file_path),
-            ..Default::default()
+            component_graph,
+            imports: Vec::new(),
+            current_component: None,
+            file_path: PathBuf::from(Self::normalize_path(file_path)),
+            import_paths: HashMap::new(),
         }
     }
 
@@ -37,17 +42,6 @@ impl FileVisitor {
             .unwrap_or_else(|_| Path::new(&file_path).to_path_buf())
             .to_string_lossy()
             .to_string()
-    }
-
-    /// Resolve the import path to the actual file path.
-    fn resolve_import_path(&self, import_path: &str) -> Option<String> {
-        let base_path = Path::new(&self.file_path).parent()?;
-        let full_path = base_path.join(import_path);
-        if full_path.exists() {
-            Some(Self::normalize_path(full_path.to_string_lossy().to_string()))
-        } else {
-            None
-        }
     }
 
     /// Checks if an identifier is a base HTML element.
@@ -153,26 +147,27 @@ impl FileVisitor {
     }
 
     fn generate_component_key(&self, name: &str) -> String {
-        format!("{}:{}", self.file_path, name)
+        format!("{}:{}", self.file_path.to_string_lossy(), name)
     }
 
     fn add_component_usage(&mut self, component_key: String, used_component_key: String, import_path: String) {
-        let origin = self.file_path.clone();
-        self.component_usages
-            .entry(component_key)
-            .or_default()
-            .push((used_component_key, import_path, origin));
+        self.component_graph.add_component(component_key.clone(), self.file_path.clone());
+        self.component_graph.add_component(used_component_key.clone(), PathBuf::from(import_path));
+        self.component_graph.add_child(component_key, used_component_key);
     }
 }
 
-impl Visit for FileVisitor {
+impl<'a> Visit for FileVisitor<'a> {
+    fn visit_module(&mut self, n: &Module) {
+        n.visit_children_with(self);
+    }
     /// Visits function declarations and checks if they are React components.
     fn visit_fn_decl(&mut self, n: &FnDecl) {
         if self.is_potential_component_name(&n.ident) && self.is_react_component_function(&n.function) {
             let component_name = n.ident.sym.to_string();
             let component_key = self.generate_component_key(&component_name);
             self.current_component = Some(component_key.clone());
-            self.component_usages.entry(component_key).or_default();
+            self.component_graph.add_component(component_key.clone(), self.file_path.clone());
         }
 
         n.visit_children_with(self);
@@ -183,14 +178,20 @@ impl Visit for FileVisitor {
     fn visit_var_declarator(&mut self, n: &VarDeclarator) {
         if let Some(ident) = n.name.as_ident() {
             println!("Visiting VarDeclarator: {:?}", ident.sym);
+
             if self.is_potential_component_name(ident) {
                 if let Some(init) = &n.init {
                     if self.is_react_component_expr(init) {
+                        println!("Ident is a React component: {:?}", ident.sym);
                         let component_name = ident.sym.to_string();
                         let component_key = self.generate_component_key(&component_name);
                         self.current_component = Some(component_key.clone());
                         println!("Set current_component to {}", component_key);
-                        self.component_usages.entry(component_key).or_default();
+
+                        if let Some(ref current_component) = self.current_component {
+                            println!("Adding component to graph: {}", current_component);
+                            self.component_graph.add_component(current_component.clone(), self.file_path.clone());
+                        }
                     }
                 }
             }
@@ -209,7 +210,7 @@ impl Visit for FileVisitor {
             let component_key = self.generate_component_key(&component_name);
             self.current_component = Some(component_key.clone());
             println!("Set current_component to {}", component_key);
-            self.component_usages.entry(component_key).or_default();
+            self.component_graph.add_component(component_key.clone(), self.file_path.clone());
         }
 
         n.visit_children_with(self);
@@ -249,7 +250,7 @@ impl Visit for FileVisitor {
                     let component_key = self.generate_component_key(&component_name);
                     let import_path = self.import_paths.get(&component_name)
                         .cloned()
-                        .unwrap_or_else(|| self.file_path.clone());
+                        .unwrap_or_else(|| self.file_path.to_string_lossy().to_string());
                     self.add_component_usage(current_component.clone(), component_key, import_path);
                 }
             }
@@ -261,6 +262,7 @@ impl Visit for FileVisitor {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use petgraph::graph::NodeIndex;
     use swc_ecma_parser::{lexer::Lexer, Parser, StringInput, Syntax, TsSyntax};
 
     fn parse_module(code: &str) -> Module {
@@ -287,12 +289,13 @@ mod tests {
         "#;
 
         let module = parse_module(code);
-        let mut visitor = FileVisitor::default();
+        let mut component_graph = ComponentGraph::new();
+        let mut visitor = FileVisitor::new(String::new(), &mut component_graph);
         visitor.visit_module(&module);
 
-        println!("{:?}", visitor.component_usages);
-        let component_key = format!("{}:MyComponent", visitor.file_path);
-        assert!(visitor.component_usages.contains_key(&component_key));
+        let component_key = format!("{}:MyComponent", visitor.file_path.to_string_lossy());
+        assert!(visitor.component_graph.components.contains_key(&component_key));
+        assert!(visitor.component_graph.graph.node_count() == 1);
     }
 
     #[test]
@@ -304,12 +307,13 @@ mod tests {
         "#;
 
         let module = parse_module(code);
-        let mut visitor = FileVisitor::default();
+        let mut component_graph = ComponentGraph::new();
+        let mut visitor = FileVisitor::new(String::new(), &mut component_graph);
         visitor.visit_module(&module);
 
-        println!("{:?}", visitor.component_usages);
-        let component_key = format!("{}:MyComponent", visitor.file_path);
-        assert!(visitor.component_usages.contains_key(&component_key));
+        let component_key = format!("{}:MyComponent", visitor.file_path.to_string_lossy());
+        assert!(visitor.component_graph.components.contains_key(&component_key));
+        assert!(visitor.component_graph.graph.node_count() == 1);
     }
 
     #[test]
@@ -323,12 +327,13 @@ mod tests {
         "#;
 
         let module = parse_module(code);
-        let mut visitor = FileVisitor::default();
+        let mut component_graph = ComponentGraph::new();
+        let mut visitor = FileVisitor::new(String::new(), &mut component_graph);
         visitor.visit_module(&module);
 
-        println!("{:?}", visitor.component_usages);
-        let component_key = format!("{}:MyComponent", visitor.file_path);
-        assert!(visitor.component_usages.contains_key(&component_key));
+        let component_key = format!("{}:MyComponent", visitor.file_path.to_string_lossy());
+        assert!(visitor.component_graph.components.contains_key(&component_key));
+        assert!(visitor.component_graph.graph.node_count() == 1);
     }
 
     #[test]
@@ -344,17 +349,17 @@ mod tests {
         "#;
 
         let module = parse_module(code);
-        let mut visitor = FileVisitor::new("test_file.tsx".to_string());
+        let mut component_graph = ComponentGraph::new();
+        let mut visitor = FileVisitor::new(String::new(), &mut component_graph);
         visitor.visit_module(&module);
 
-        let component_key = format!("{}:MyComponent", visitor.file_path);
-        let usages = visitor.component_usages.get(&component_key).unwrap();
-        let custom_component_key = format!("{}:CustomComponent", visitor.file_path);
-        assert!(usages.iter().any(|(key, path, origin)| 
-            key == &custom_component_key && 
-            path == &visitor.file_path && 
-            origin == &visitor.file_path
-        ));
+        let component_key = format!("{}:MyComponent", visitor.file_path.to_string_lossy());
+        let custom_component_key = format!("{}:CustomComponent", visitor.file_path.to_string_lossy());
+
+        assert!(visitor.component_graph.graph.node_count() == 2);
+        assert!(visitor.component_graph.graph.contains_edge(NodeIndex::new(0), NodeIndex::new(1)));
+        assert!(visitor.component_graph.graph.node_weight(NodeIndex::new(0)).unwrap() == &component_key);
+        assert!(visitor.component_graph.graph.node_weight(NodeIndex::new(1)).unwrap() == &custom_component_key);
     }
 
     #[test]
@@ -370,17 +375,17 @@ mod tests {
         "#;
 
         let module = parse_module(code);
-        let mut visitor = FileVisitor::new("test_file.tsx".to_string());
+        let mut component_graph = ComponentGraph::new();
+        let mut visitor = FileVisitor::new(String::new(), &mut component_graph);
         visitor.visit_module(&module);
 
-        let component_key = format!("{}:MyComponent", visitor.file_path);
-        let usages = visitor.component_usages.get(&component_key).unwrap();
-        let custom_component_key = format!("{}:CustomComponent", visitor.file_path);
-        assert!(usages.iter().any(|(key, path, origin)| 
-            key == &custom_component_key && 
-            path == &visitor.file_path && 
-            origin == &visitor.file_path
-        ));
+        let component_key = format!("{}:MyComponent", visitor.file_path.to_string_lossy());
+        let custom_component_key = format!("{}:CustomComponent", visitor.file_path.to_string_lossy());
+        
+        assert!(visitor.component_graph.graph.node_count() == 2);
+        assert!(visitor.component_graph.graph.contains_edge(NodeIndex::new(0), NodeIndex::new(1)));
+        assert!(visitor.component_graph.graph.node_weight(NodeIndex::new(0)).unwrap() == &component_key);
+        assert!(visitor.component_graph.graph.node_weight(NodeIndex::new(1)).unwrap() == &custom_component_key);
     }
 
     #[test]
@@ -396,13 +401,11 @@ mod tests {
         "#;
 
         let module = parse_module(code);
-        let mut visitor = FileVisitor::default();
+        let mut component_graph = ComponentGraph::new();
+        let mut visitor = FileVisitor::new(String::new(), &mut component_graph);
         visitor.visit_module(&module);
 
-        let component_key = format!("{}:MyComponent", visitor.file_path);
-        let usages = visitor.component_usages.get(&component_key).unwrap();
-        assert!(!usages.iter().any(|(key, _, _)| key == "div"));
-        assert!(!usages.iter().any(|(key, _, _)| key == "span"));
+        assert!(visitor.component_graph.graph.node_count() == 1);
     }
 
     #[test]
@@ -418,13 +421,11 @@ mod tests {
         "#;
 
         let module = parse_module(code);
-        let mut visitor = FileVisitor::default();
+        let mut component_graph = ComponentGraph::new();
+        let mut visitor = FileVisitor::new("/Home.tsx".to_string(), &mut component_graph);
         visitor.visit_module(&module);
-
-        let component_key = format!("{}:MyComponent", visitor.file_path);
-        let usages = visitor.component_usages.get(&component_key).unwrap();
-        assert!(!usages.iter().any(|(key, _, _)| key == "div"));
-        assert!(!usages.iter().any(|(key, _, _)| key == "span"));
+        
+        assert!(visitor.component_graph.graph.node_count() == 1);
     }
 
     #[test]
@@ -449,23 +450,20 @@ mod tests {
         "#;
 
         let module = parse_module(code);
-        let mut visitor = FileVisitor::default();
+        let mut component_graph = ComponentGraph::new();
+        let mut visitor = FileVisitor::new(String::new(), &mut component_graph);
         visitor.visit_module(&module);
 
-        let parent_component_key = format!("{}:ParentComponent", visitor.file_path);
-        let usages = visitor.component_usages.get(&parent_component_key).unwrap();
-        let child_component1_key = format!("{}:ChildComponent1", visitor.file_path);
-        let child_component2_key = format!("{}:ChildComponent2", visitor.file_path);
-        assert!(usages.iter().any(|(key, path, origin)| 
-            key == &child_component1_key && 
-            path == &visitor.file_path && 
-            origin == &visitor.file_path
-        ));
-        assert!(usages.iter().any(|(key, path, origin)| 
-            key == &child_component2_key && 
-            path == &visitor.file_path && 
-            origin == &visitor.file_path
-        ));
+        let parent_component_key = format!("{}:ParentComponent", visitor.file_path.to_string_lossy());
+
+        let child_component1_key = format!("{}:ChildComponent1", visitor.file_path.to_string_lossy());
+        let child_component2_key = format!("{}:ChildComponent2", visitor.file_path.to_string_lossy());
+        
+        assert!(visitor.component_graph.graph.contains_edge(NodeIndex::new(0), NodeIndex::new(1)));
+        assert!(visitor.component_graph.graph.contains_edge(NodeIndex::new(0), NodeIndex::new(2)));
+        assert!(visitor.component_graph.graph.node_weight(NodeIndex::new(0)).unwrap() == &parent_component_key);
+        assert!(visitor.component_graph.graph.node_weight(NodeIndex::new(1)).unwrap() == &child_component1_key);
+        assert!(visitor.component_graph.graph.node_weight(NodeIndex::new(2)).unwrap() == &child_component2_key);
     }
 
     #[test]
@@ -484,23 +482,18 @@ mod tests {
             }
         "#;
         let module = parse_module(code);
-        let mut visitor = FileVisitor::default();
+        let mut component_graph = ComponentGraph::new();
+        let mut visitor = FileVisitor::new(String::new(), &mut component_graph);
         visitor.visit_module(&module);
 
-        let parent_component_key = format!("{}:ParentComponent", visitor.file_path);
-        let usages = visitor.component_usages.get(&parent_component_key).unwrap();
-        let child_component1_key = format!("{}:ChildComponent1", visitor.file_path);
-        let child_component2_key = format!("{}:ChildComponent2", visitor.file_path);
-        println!("{:?}", usages);
-        assert!(usages.iter().any(|(key, path, origin)| 
-            key == &child_component1_key && 
-            path == "./ChildComponent1" && 
-            origin == &visitor.file_path
-        ));
-        assert!(usages.iter().any(|(key, path, origin)| 
-            key == &child_component2_key && 
-            path == "./ChildComponent2" && 
-            origin == &visitor.file_path
-        ));
+        let parent_component_key = format!("{}:ParentComponent", visitor.file_path.to_string_lossy());
+        let child_component1_key = format!("{}:ChildComponent1", visitor.file_path.to_string_lossy());
+        let child_component2_key = format!("{}:ChildComponent2", visitor.file_path.to_string_lossy());
+
+        assert!(visitor.component_graph.graph.contains_edge(NodeIndex::new(0), NodeIndex::new(1)));
+        assert!(visitor.component_graph.graph.contains_edge(NodeIndex::new(0), NodeIndex::new(2)));
+        assert!(visitor.component_graph.graph.node_weight(NodeIndex::new(0)).unwrap() == &parent_component_key);
+        assert!(visitor.component_graph.graph.node_weight(NodeIndex::new(1)).unwrap() == &child_component1_key);
+        assert!(visitor.component_graph.graph.node_weight(NodeIndex::new(2)).unwrap() == &child_component2_key);
     }
 }
