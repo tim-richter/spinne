@@ -1,9 +1,11 @@
 [package]
 name = "spinne"
-version = "0.1.0"
-description = "spinne is a cli tool that analyzes your project code and finds information about prop usage and other design system analytics."
+version = "0.2.0"
+description = "spinne is a cli tool that analyzes design system usage for react projects."
 license = "MIT"
+authors = ["Tim Richter <tim@timrichter.dev>"]
 edition = "2021"
+repository = "https://github.com/tim-richter/spinne"
 
 [dependencies]
 swc_common = { version = "0.37", features = ['tty-emitter']}
@@ -13,6 +15,11 @@ swc_ecma_visit = "0.104"
 swc_ecma_parser = { version = "0.149", features = ['typescript']}
 clap = { version = "4.5.16", features = ["derive"] }
 petgraph = { version = "0.6"}
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+glob = "0.3"
 
 [dev-dependencies]
 tempfile = "3.2"
+assert_cmd = "2.0"
+predicates = "3.0"

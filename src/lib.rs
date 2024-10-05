@@ -1,7 +1,7 @@
-mod project_traverser;
-mod visitors;
 mod component_graph;
+mod file_visitor;
+mod traverse;
 
-pub use project_traverser::ProjectTraverser;
-pub use visitors::FileVisitor;
 pub use component_graph::ComponentGraph;
+pub use file_visitor::FileVisitor;
+pub use traverse::ProjectTraverser;
