@@ -59,16 +59,16 @@ impl ProjectTraverser {
     /// Analyze a TypeScript file and update the component graph
     fn analyze_file(&mut self, file_path: &Path) -> std::io::Result<()> {
         let source_code = fs::read_to_string(file_path)?;
-        let module = self.parse_typescript(&source_code);
+        let module = ProjectTraverser::parse_typescript(&source_code);
 
-        let mut visitor = FileVisitor::new(file_path.to_str().unwrap().to_string(), &mut self.component_graph);
+        let mut visitor = FileVisitor::new(file_path.to_str().unwrap().to_string(), &mut self.component_graph, file_path.parent().unwrap().to_path_buf());
         visitor.visit_module(&module);
 
         Ok(())
     }
 
     /// Parse the TypeScript source code into an AST module
-    fn parse_typescript(&self, source_code: &str) -> swc_ecma_ast::Module {
+    pub fn parse_typescript(source_code: &str) -> swc_ecma_ast::Module {
         let lexer = Lexer::new(
             Syntax::Typescript(TsSyntax {
                 tsx: true,

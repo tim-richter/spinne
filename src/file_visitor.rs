@@ -1,7 +1,7 @@
 use swc_ecma_ast::*;
 use swc_ecma_visit::{Visit, VisitWith};
-use std::{collections::HashMap, path::Path};
-use crate::component_graph::ComponentGraph;
+use std::{collections::HashMap, fs, path::Path};
+use crate::{component_graph::ComponentGraph, ProjectTraverser};
 use std::path::PathBuf;
 use swc_common::FileName;
 use swc_ecma_loader::{resolve::Resolve, resolvers::node::NodeModulesResolver};
@@ -12,16 +12,20 @@ pub struct FileVisitor<'a> {
     current_component: Option<String>,
     file_path: PathBuf,
     resolver: NodeModulesResolver,
+    resolved_imports: HashMap<String, PathBuf>,
+    project_root: PathBuf,
 }
 
 impl<'a> FileVisitor<'a> {
-    pub fn new(file_path: String, component_graph: &'a mut ComponentGraph) -> Self {
+    pub fn new(file_path: String, component_graph: &'a mut ComponentGraph, project_root: PathBuf) -> Self {
         Self {
             component_graph,
             imports: HashMap::new(),
             current_component: None,
             file_path: PathBuf::from(Self::normalize_path(&file_path)),
             resolver: NodeModulesResolver::default(),
+            resolved_imports: HashMap::new(),
+            project_root,
         }
     }
 
@@ -30,13 +34,72 @@ impl<'a> FileVisitor<'a> {
         Path::new(file_path).canonicalize().unwrap_or_else(|_| Path::new(file_path).to_path_buf())
     }
 
-    fn resolve_import(&self, import_path: &str) -> PathBuf {
-        let base = FileName::Real(self.file_path.clone());
-
-        match self.resolver.resolve(&base, import_path) {
-            Ok(resolved) => resolved.filename.to_string().into(),
-            Err(_) => self.file_path.parent().unwrap().join(import_path),
+    /// Resolve a component name to a file path.
+    fn resolve_component_path(&mut self, component_name: &str) -> Option<PathBuf> {
+        if let Some(path) = self.resolved_imports.get(component_name) {
+            return Some(path.clone());
         }
+        
+        let import_path = self.imports.get(component_name)?;
+        let import_path_str = import_path.to_str().unwrap();
+        let resolved_path = self.resolve_import(import_path_str);
+
+        if let Some(resolved_path) = resolved_path {
+            self.resolved_imports.insert(component_name.to_string(), resolved_path.clone());
+            return Some(resolved_path);
+        }
+        
+        None
+    }
+
+    /// Resolves an import path to a file path.
+    fn resolve_import(&self, import_path: &str) -> Option<PathBuf> {
+        let base = FileName::Real(self.file_path.clone());
+        println!("Import path: {:?}", import_path);
+        match self.resolver.resolve(&base, import_path) {
+            Ok(resolved) => {
+                let path = PathBuf::from(resolved.filename.to_string());
+                println!("Resolved path: {:?}", path);
+                self.traverse_import(&path)
+            },
+            Err(e) => {
+                println!("Error resolving import: {:?}", e);
+                let path = self.project_root.join(import_path);
+                self.traverse_import(&path)
+            },
+        }
+    }
+
+    /// Traverse an import path and update the component graph
+    fn traverse_import(&self, path: &PathBuf) -> Option<PathBuf> {
+        println!("Traversing path: {:?}", path);
+        if path.is_file() {
+            let content = fs::read_to_string(path).ok()?;
+            let module = ProjectTraverser::parse_typescript(&content);
+            
+            for item in &module.body {
+                if let ModuleItem::ModuleDecl(ModuleDecl::ExportDecl(export_decl)) = item {
+                    if let Decl::Var(var_decl) = &export_decl.decl {
+                        for decl in &var_decl.decls {
+                            if let Pat::Ident(ident) = &decl.name {
+                                return Some(path.clone());
+                            }
+                        }
+                    } else if let Decl::Fn(fn_decl) = &export_decl.decl {
+                        return Some(path.clone());
+                    }
+                } else if let ModuleItem::ModuleDecl(ModuleDecl::ExportNamed(export_named)) = item {
+                    if export_named.src.is_some() {
+                        let new_path = path.parent().unwrap().join(export_named.src.as_ref().unwrap().value.to_string());
+                        return self.traverse_import(&new_path);
+                    }
+                } else if let ModuleItem::ModuleDecl(ModuleDecl::ExportAll(export_all)) = item {
+                    let new_path = path.parent().unwrap().join(export_all.src.value.to_string());
+                    return self.traverse_import(&new_path);
+                }
+            }
+        }
+        None
     }
 
     /// Checks if an identifier is a potential component name (starts with an uppercase letter).
@@ -47,7 +110,7 @@ impl<'a> FileVisitor<'a> {
 }
 
 impl<'a> Visit for FileVisitor<'a> {
-    fn visit_module(&mut self, n: &Module) {
+    fn visit_module(&mut self, n: &swc_ecma_ast::Module) {
         n.visit_children_with(self);
     }
 
@@ -99,17 +162,18 @@ impl<'a> Visit for FileVisitor<'a> {
 
     /// Visits JSX opening elements and adds them as children of the current component.
     fn visit_jsx_opening_element(&mut self, n: &JSXOpeningElement) {
-        if let Some(ref current_component) = self.current_component {
+        if let Some(current_component) = self.current_component.clone() {
             if let JSXElementName::Ident(ident) = &n.name {
                 if self.is_component(ident) {
                     let component_name = ident.sym.to_string();
-                    let component_path = self.imports.get(&component_name).cloned().unwrap_or_else(|| self.file_path.clone());
-
+                    let component_path = self.resolve_component_path(&component_name)
+                        .unwrap_or_else(|| self.file_path.clone());
+    
                     self.component_graph.add_child(
-                        (current_component, &self.file_path),
+                        (&current_component, &self.file_path),
                         (&component_name, &component_path)
                     );
-
+    
                     // Add prop usage
                     for attr in &n.attrs {
                         if let JSXAttrOrSpread::JSXAttr(jsx_attr) = attr {
@@ -121,15 +185,18 @@ impl<'a> Visit for FileVisitor<'a> {
                 }
             }
         }
-
+    
         n.visit_children_with(self);
     }
 
     fn visit_import_decl(&mut self, n: &ImportDecl) {
-        let import_path = self.resolve_import(&n.src.value);
+        println!("ImportDecl: {:?}", n.src.value);
+        let import_path = self.resolve_import(&n.src.value).unwrap();
+
         for specifier in &n.specifiers {
             if let ImportSpecifier::Named(named) = specifier {
                 self.imports.insert(named.local.sym.to_string(), import_path.clone());
+                self.resolved_imports.insert(named.local.sym.to_string(), import_path.clone());
             }
         }
         n.visit_children_with(self);
@@ -140,6 +207,7 @@ impl<'a> Visit for FileVisitor<'a> {
 mod tests {
     use super::*;
     use swc_ecma_parser::{lexer::Lexer, Parser, StringInput, Syntax, TsSyntax};
+    use tempfile::TempDir;
 
     fn parse_module(code: &str) -> Module {
         let lexer = Lexer::new(
@@ -166,7 +234,7 @@ mod tests {
 
         let module = parse_module(code);
         let mut component_graph = ComponentGraph::new();
-        let mut visitor = FileVisitor::new(String::new(), &mut component_graph);
+        let mut visitor = FileVisitor::new(String::new(), &mut component_graph, PathBuf::from("."));
         visitor.visit_module(&module);
 
         assert!(visitor.component_graph.has_component("MyComponent", &visitor.file_path));
@@ -187,7 +255,7 @@ mod tests {
 
         let module = parse_module(code);
         let mut component_graph = ComponentGraph::new();
-        let mut visitor = FileVisitor::new(String::new(), &mut component_graph);
+        let mut visitor = FileVisitor::new(String::new(), &mut component_graph, PathBuf::from("."));
         visitor.visit_module(&module);
 
         assert!(visitor.component_graph.has_component("MyComponent", &visitor.file_path));
@@ -211,7 +279,7 @@ mod tests {
 
         let module = parse_module(code);
         let mut component_graph = ComponentGraph::new();
-        let mut visitor = FileVisitor::new(String::new(), &mut component_graph);
+        let mut visitor = FileVisitor::new(String::new(), &mut component_graph, PathBuf::from("."));
         visitor.visit_module(&module);
 
         assert!(visitor.component_graph.has_component("MyComponent", &visitor.file_path));
@@ -231,11 +299,102 @@ mod tests {
 
         let module = parse_module(code);
         let mut component_graph = ComponentGraph::new();
-        let mut visitor = FileVisitor::new(String::new(), &mut component_graph);
+        let mut visitor = FileVisitor::new(String::new(), &mut component_graph, PathBuf::from("."));
         visitor.visit_module(&module);
 
         assert!(visitor.component_graph.has_component("MyComponent", &visitor.file_path));
         assert!(visitor.component_graph.has_component("MyComponent2", &visitor.file_path));
+        assert!(visitor.component_graph.graph.node_count() == 2);
+    }
+
+    #[test]
+    fn test_import_component() {
+        let temp_dir = TempDir::new().unwrap();
+        let root = temp_dir.path();
+
+        let file_path = root.join("Button.tsx");
+        fs::write(&file_path, "export function Button() { return <button>Click me</button>; }").unwrap();
+
+        let code = r#"
+            import { Button } from "./Button.tsx";
+
+            function MyComponent() {
+                return <Button />;
+            }
+        "#;
+
+        let module = parse_module(code);
+        let mut component_graph = ComponentGraph::new();
+        let mut visitor = FileVisitor::new(String::new(), &mut component_graph, root.to_path_buf());
+        visitor.visit_module(&module);
+
+        assert!(visitor.component_graph.has_component("MyComponent", &visitor.file_path));
+        assert!(visitor.component_graph.has_component("Button", &file_path));
+        assert!(visitor.component_graph.graph.node_count() == 2);
+    }
+
+    #[test]
+    fn test_import_component_from_nested_directory() {
+        let temp_dir = TempDir::new().unwrap();
+        let root = temp_dir.path();
+
+        let file_path = root.join("components/Button.tsx");
+        fs::create_dir_all(file_path.parent().unwrap()).unwrap();
+        fs::write(&file_path, "export function Button() { return <button>Click me</button>; }").unwrap();
+
+        let code = r#"
+            import { Button } from "./components/Button.tsx";
+
+            function MyComponent() {
+                return <Button />;
+            }
+        "#;
+
+        let module = parse_module(code);
+        let mut component_graph = ComponentGraph::new();
+        let mut visitor = FileVisitor::new(String::new(), &mut component_graph, root.to_path_buf());
+        visitor.visit_module(&module);
+
+        assert!(visitor.component_graph.has_component("MyComponent", &visitor.file_path));
+        assert!(visitor.component_graph.has_component("Button", &file_path));
+        assert!(visitor.component_graph.graph.node_count() == 2);
+    }
+
+    #[test]
+    fn test_import_component_from_barrel() {
+        let temp_dir = TempDir::new().unwrap();
+        let root = temp_dir.path();
+
+        fs::create_dir_all(root.join("components")).unwrap();
+
+        let index_file_path = root.join("components/index.ts");
+        fs::write(&index_file_path, "export { Button } from './Button';").unwrap();
+
+        let button_file_path = root.join("components/Button.tsx");
+        fs::write(&button_file_path, "export function Button() { return <button>Click me</button>; }").unwrap();
+
+        // Print the current components directory structure
+        println!("Components directory structure:");
+        for entry in fs::read_dir(root.join("components")).unwrap() {
+            let entry = entry.unwrap();
+            println!("  {:?}", entry.file_name().to_string_lossy());
+        }
+
+        let code = r#"
+            import { Button } from "./components";
+
+            function MyComponent() {
+                return <Button />;
+            }
+        "#;
+
+        let module = parse_module(code);
+        let mut component_graph = ComponentGraph::new();
+        let mut visitor = FileVisitor::new(String::new(), &mut component_graph, root.to_path_buf());
+        visitor.visit_module(&module);
+
+        assert!(visitor.component_graph.has_component("MyComponent", &visitor.file_path));
+        assert!(visitor.component_graph.has_component("Button", &button_file_path));
         assert!(visitor.component_graph.graph.node_count() == 2);
     }
 }

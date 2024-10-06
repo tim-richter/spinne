@@ -8,11 +8,11 @@ edition = "2021"
 repository = "https://github.com/tim-richter/spinne"
 
 [dependencies]
-swc_common = { version = "0.37", features = ['tty-emitter']}
-swc_ecma_ast = "0.118"
-swc_ecma_loader = { version = "0.49", features = ['node']}
-swc_ecma_visit = "0.104"
-swc_ecma_parser = { version = "0.149", features = ['typescript']}
+swc_common = { version = "0.40", features = ['tty-emitter']}
+swc_ecma_ast = "0.121"
+swc_ecma_loader = { version = "0.52", features = ['node', 'tsc']}
+swc_ecma_visit = "0.107"
+swc_ecma_parser = { version = "0.152", features = ['typescript']}
 clap = { version = "4.5.16", features = ["derive"] }
 petgraph = { version = "0.6"}
 serde = { version = "1.0", features = ["derive"] }
