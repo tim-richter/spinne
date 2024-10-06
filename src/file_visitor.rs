@@ -89,13 +89,21 @@ impl<'a> FileVisitor<'a> {
                         return Some(path.clone());
                     }
                 } else if let ModuleItem::ModuleDecl(ModuleDecl::ExportNamed(export_named)) = item {
-                    if export_named.src.is_some() {
-                        let new_path = path.parent().unwrap().join(export_named.src.as_ref().unwrap().value.to_string());
-                        return self.traverse_import(&new_path);
+                    if let Some(src) = &export_named.src {
+                        let new_path_str = src.value.to_string();
+                        let base = FileName::Real(path.clone());
+                        if let Ok(resolved) = self.resolver.resolve(&base, &new_path_str) {
+                            let new_path = PathBuf::from(resolved.filename.to_string());
+                            return self.traverse_import(&new_path);
+                        }
                     }
                 } else if let ModuleItem::ModuleDecl(ModuleDecl::ExportAll(export_all)) = item {
-                    let new_path = path.parent().unwrap().join(export_all.src.value.to_string());
-                    return self.traverse_import(&new_path);
+                    let new_path_str = export_all.src.value.to_string();
+                    let base = FileName::Real(path.clone());
+                    if let Ok(resolved) = self.resolver.resolve(&base, &new_path_str) {
+                        let new_path = PathBuf::from(resolved.filename.to_string());
+                        return self.traverse_import(&new_path);
+                    }
                 }
             }
         }
