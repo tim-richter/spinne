@@ -55,8 +55,6 @@ impl<'a> FileVisitor<'a> {
     /// Resolves an import path to a file path.
     fn resolve_import(&self, import_path: &str) -> Option<PathBuf> {
         let base = FileName::Real(self.file_path.clone());
-        println!("Import path: {:?}", import_path);
-
         
         match self.resolver.resolve(&base, import_path) {
             Ok(resolved) => {
@@ -382,6 +380,14 @@ mod tests {
             println!("  {:?}", entry.file_name().to_string_lossy());
         }
 
+        let my_component_file_path = root.join("MyComponent.tsx");
+        fs::write(&my_component_file_path, r#"
+            import { Button } from "./components";
+
+            function MyComponent() {
+                return <Button />;
+            }
+        "#).unwrap();
         let code = r#"
             import { Button } from "./components";
 
@@ -392,7 +398,7 @@ mod tests {
 
         let module = parse_module(code);
         let mut component_graph = ComponentGraph::new();
-        let mut visitor = FileVisitor::new(String::new(), &mut component_graph, root.to_path_buf());
+        let mut visitor = FileVisitor::new(my_component_file_path.display().to_string(), &mut component_graph, root.to_path_buf());
         visitor.visit_module(&module);
 
         assert!(visitor.component_graph.has_component("MyComponent", &visitor.file_path));
