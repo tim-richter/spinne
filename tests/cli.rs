@@ -34,13 +34,13 @@ fn test_cli_with_default_output() {
     cmd.arg("-e")
         .arg(temp_dir.path().join("src"))
         .arg("-o")
-        .arg(temp_dir.path().join("spinnen-netz.json"))
+        .arg(temp_dir.path().join("spinne-report"))
         .assert()
         .success()
         .stdout(predicate::str::contains("Writing report to:"));
 
     // Check if the output file is created
-    assert!(temp_dir.path().join("spinnen-netz.json").exists());
+    assert!(temp_dir.path().join("spinne-report.json").exists());
 }
 
 #[test]
@@ -53,7 +53,7 @@ fn test_cli_with_console_output() {
     cmd.arg("-e")
         .arg(temp_dir.path().join("src"))
         .arg("-o")
-        .arg(temp_dir.path().join("spinnen-netz.json"))
+        .arg(temp_dir.path().join("spinne-report.json"))
         .arg("-f")
         .arg("console")
         .assert()
@@ -62,7 +62,7 @@ fn test_cli_with_console_output() {
         .stdout(predicate::str::contains("Button"));
 
     // Check that no output file is created
-    assert!(!temp_dir.path().join("spinnen-netz.json").exists());
+    assert!(!temp_dir.path().join("spinne-report.json").exists());
 }
 
 #[test]
