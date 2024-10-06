@@ -3,8 +3,8 @@ use swc_ecma_visit::{Visit, VisitWith};
 use std::{collections::HashMap, fs, path::Path};
 use crate::{component_graph::ComponentGraph, ProjectTraverser};
 use std::path::PathBuf;
-use swc_common::FileName;
-use swc_ecma_loader::{resolve::Resolve, resolvers::node::NodeModulesResolver};
+use swc_common::{collections::AHashMap, FileName};
+use swc_ecma_loader::{resolve::Resolve, resolvers::node::NodeModulesResolver, TargetEnv};
 
 pub struct FileVisitor<'a> {
     pub component_graph: &'a mut ComponentGraph,
@@ -23,7 +23,7 @@ impl<'a> FileVisitor<'a> {
             imports: HashMap::new(),
             current_component: None,
             file_path: PathBuf::from(Self::normalize_path(&file_path)),
-            resolver: NodeModulesResolver::default(),
+            resolver: NodeModulesResolver::without_node_modules(TargetEnv::Node, AHashMap::default(), true),
             resolved_imports: HashMap::new(),
             project_root,
         }
@@ -56,6 +56,8 @@ impl<'a> FileVisitor<'a> {
     fn resolve_import(&self, import_path: &str) -> Option<PathBuf> {
         let base = FileName::Real(self.file_path.clone());
         println!("Import path: {:?}", import_path);
+
+        
         match self.resolver.resolve(&base, import_path) {
             Ok(resolved) => {
                 let path = PathBuf::from(resolved.filename.to_string());
