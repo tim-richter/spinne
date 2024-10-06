@@ -6,10 +6,12 @@
 Spinne
 </h1>
 <p align="center">
-Spins a web of components and analyzes prop usage, adoption etc
+Spins a web of components and analyzes component/prop usage in your react project
 <p>
 
 ## Installation
+
+Spinne is a command line tool written in rust, so you need to have rust/cargo installed.
 
 ```bash
 cargo install spinne
@@ -20,20 +22,20 @@ cargo install spinne
 To scan for components in your current directory:
 
 ```bash
-spinne -e ./src
+spinne
 ```
 
-This command will output the results in a file 'scan-data.json'.
+This command will output the results in a file 'spinne-report.json' by default.
 If you want to output it directly to the console you can use `-o console`:
 
 ```bash
-spinne -e ./src -o console
+spinne -o console
 ```
 
 ## Options
 
-- `-e, --entry <path>`: entry point file or directory
-- `-o, --output <format>`: define the output format 
-- `-i, --ignore <path>`: define ignored folders. this is set to a reasonable default, but if
-you need more control over the scanned `.tsx` files, you might need to use this. paths will get matched
-against all subpaths. You can define multiple via `-i fixtures dist`, or `-i fixtures -i dist`
+| Option | Description | Options | Default |
+| --- | --- | --- | --- |
+| `-e, --entry <path>` | entry point directory | Path | current directory |
+| `-o, --output <format>` | define the output type | `file`, `console` | file |
+| `-i, --ignore <path>` | define ignored folders | comma separated glob patterns | `**/node_modules/**,**/dist/**,**/build/**` |
