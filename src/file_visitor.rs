@@ -75,6 +75,16 @@ impl<'a> FileVisitor<'a> {
         println!("Traversing path: {:?}", path);
         if path.is_file() {
             let content = fs::read_to_string(path).ok()?;
+            let extension = path.extension().unwrap_or_default();
+            println!("Extension: {:?}", extension);
+
+            // abort traversing if the path is not a JS/TS file
+            if extension != "ts" && extension != "tsx" &&
+               extension != "js" && extension != "jsx" {
+                println!("Not a JS/TS file");
+                return None;
+            }
+
             let module = ProjectTraverser::parse_typescript(&content);
             
             for item in &module.body {
@@ -199,14 +209,20 @@ impl<'a> Visit for FileVisitor<'a> {
 
     fn visit_import_decl(&mut self, n: &ImportDecl) {
         println!("ImportDecl: {:?}", n.src.value);
-        let import_path = self.resolve_import(&n.src.value).unwrap();
+        // handle none value
+        let import_path = self.resolve_import(&n.src.value);
 
-        for specifier in &n.specifiers {
-            if let ImportSpecifier::Named(named) = specifier {
-                self.imports.insert(named.local.sym.to_string(), import_path.clone());
-                self.resolved_imports.insert(named.local.sym.to_string(), import_path.clone());
+        if let Some(import_path) = import_path {
+            for specifier in &n.specifiers {
+                if let ImportSpecifier::Named(named) = specifier {
+                    self.imports.insert(named.local.sym.to_string(), import_path.clone());
+                    self.resolved_imports.insert(named.local.sym.to_string(), import_path.clone());
+                }
             }
+        } else {
+            println!("ImportDecl: {:?} not found", n.src.value);
         }
+
         n.visit_children_with(self);
     }
 }
@@ -373,38 +389,72 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let root = temp_dir.path();
 
+        // Create the components directory
         fs::create_dir_all(root.join("components")).unwrap();
 
+        // Create the index.ts file
         let index_file_path = root.join("components/index.ts");
         fs::write(&index_file_path, "export { Button } from './Button';").unwrap();
 
+        // Create the Button.tsx file
         let button_file_path = root.join("components/Button.tsx");
         fs::write(&button_file_path, "export function Button() { return <button>Click me</button>; }").unwrap();
 
-        // Print the current components directory structure
-        println!("Components directory structure:");
-        for entry in fs::read_dir(root.join("components")).unwrap() {
-            let entry = entry.unwrap();
-            println!("  {:?}", entry.file_name().to_string_lossy());
-        }
-
+        // Create the MyComponent.tsx file
         let my_component_file_path = root.join("MyComponent.tsx");
-        fs::write(&my_component_file_path, r#"
-            import { Button } from "./components";
-
-            function MyComponent() {
-                return <Button />;
-            }
-        "#).unwrap();
-        let code = r#"
+        let my_component_code = r#"
             import { Button } from "./components";
 
             function MyComponent() {
                 return <Button />;
             }
         "#;
+        fs::write(&my_component_file_path, my_component_code).unwrap();
 
-        let module = parse_module(code);
+        let module = parse_module(my_component_code);
+        let mut component_graph = ComponentGraph::new();
+        let mut visitor = FileVisitor::new(my_component_file_path.display().to_string(), &mut component_graph, root.to_path_buf());
+        visitor.visit_module(&module);
+
+        assert!(visitor.component_graph.has_component("MyComponent", &visitor.file_path));
+        assert!(visitor.component_graph.has_component("Button", &button_file_path));
+        assert!(visitor.component_graph.graph.node_count() == 2);
+    }
+
+    #[test]
+    fn test_import_component_barrel_with_other_files() {
+        let temp_dir = TempDir::new().unwrap();
+        let root = temp_dir.path();
+
+        // Create the components directory
+        fs::create_dir_all(root.join("components")).unwrap();
+
+        // Create css file
+        let css_file_path = root.join("styles.css");
+        fs::write(&css_file_path, "body { background-color: red; }").unwrap();
+
+        // Create the index.ts file
+        let index_file_path = root.join("components/index.ts");
+        fs::write(&index_file_path, "export { Button } from './Button';").unwrap();
+
+        // Create the Button.tsx file
+        let button_file_path = root.join("components/Button.tsx");
+        fs::write(&button_file_path, "export function Button() { return <button>Click me</button>; }").unwrap();
+
+        // Create the MyComponent.tsx file
+        let my_component_file_path = root.join("MyComponent.tsx");
+        let my_component_code = r#"
+            import { Button } from "./components";
+            import "./styles.css";
+
+            function MyComponent() {
+                return <Button />;
+            }
+        "#; 
+
+        fs::write(&my_component_file_path, my_component_code).unwrap();
+
+        let module = parse_module(my_component_code);
         let mut component_graph = ComponentGraph::new();
         let mut visitor = FileVisitor::new(my_component_file_path.display().to_string(), &mut component_graph, root.to_path_buf());
         visitor.visit_module(&module);
