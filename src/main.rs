@@ -15,7 +15,7 @@ struct Args {
     output: Option<String>,
 
     /// output format
-    #[arg(short, long, default_value =  "json")]
+    #[arg(short, long, default_value =  "file")]
     format: Format,
 
     /// Ignore directories in glob patterns (comma separated)
