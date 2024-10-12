@@ -1,11 +1,14 @@
-use std::{fs, sync::Arc};
-use std::path::Path;
 use log::debug;
+use std::path::Path;
+use std::{fs, sync::Arc};
 use swc_ecma_parser::{lexer::Lexer, Parser, StringInput, Syntax, TsSyntax};
 
 use swc_ecma_visit::Visit;
 
-use crate::{component_graph::ComponentGraph, file_visitor::FileVisitor, config::Config, ts_config_reader::TsConfigReader};
+use crate::{
+    component_graph::ComponentGraph, config::Config, file_visitor::FileVisitor,
+    ts_config_reader::TsConfigReader,
+};
 
 /// ProjectTraverser is responsible for traversing the project and analyzing TypeScript files
 pub struct ProjectTraverser {
@@ -26,7 +29,11 @@ impl ProjectTraverser {
     }
 
     /// Traverse the project and analyze TypeScript files
-    pub fn traverse(&mut self, entry_point: &Path, ignore: &[String]) -> std::io::Result<&ComponentGraph> {
+    pub fn traverse(
+        &mut self,
+        entry_point: &Path,
+        ignore: &[String],
+    ) -> std::io::Result<&ComponentGraph> {
         self.traverse_directory(entry_point, ignore)?;
         Ok(&self.component_graph)
     }
@@ -35,11 +42,17 @@ impl ProjectTraverser {
     fn traverse_directory(&mut self, dir: &Path, ignore: &[String]) -> std::io::Result<()> {
         debug!("Traversing directory: {:?}", dir);
         if !dir.exists() {
-            return Err(std::io::Error::new(std::io::ErrorKind::NotFound, format!("Entry point does not exist: {:?}", dir)));
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::NotFound,
+                format!("Entry point does not exist: {:?}", dir),
+            ));
         }
 
         if dir.is_file() {
-            return Err(std::io::Error::new(std::io::ErrorKind::Other, format!("Entry point is a file: {:?}", dir)));
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::Other,
+                format!("Entry point is a file: {:?}", dir),
+            ));
         }
 
         if dir.is_dir() {
@@ -47,7 +60,10 @@ impl ProjectTraverser {
                 let entry = entry?;
                 let path = entry.path();
 
-                if ignore.iter().any(|pattern| glob::Pattern::new(pattern).unwrap().matches_path(&path)) {
+                if ignore
+                    .iter()
+                    .any(|pattern| glob::Pattern::new(pattern).unwrap().matches_path(&path))
+                {
                     continue;
                 }
 
@@ -69,7 +85,11 @@ impl ProjectTraverser {
         let source_code = fs::read_to_string(file_path)?;
         let module = ProjectTraverser::parse_typescript(&source_code);
 
-        let mut visitor = FileVisitor::new(file_path.to_str().unwrap().to_string(), &mut self.component_graph, self.config.clone());
+        let mut visitor = FileVisitor::new(
+            file_path.to_str().unwrap().to_string(),
+            &mut self.component_graph,
+            self.config.clone(),
+        );
         visitor.visit_module(&module);
 
         Ok(())
@@ -89,7 +109,8 @@ impl ProjectTraverser {
 
         let mut parser = Parser::new_from(lexer);
         parser
-            .parse_module().expect("Failed to parse TypeScript module")
+            .parse_module()
+            .expect("Failed to parse TypeScript module")
     }
 }
 
@@ -140,9 +161,18 @@ mod tests {
         let graph = result.unwrap();
 
         // Check if all components were found
-        assert!(graph.has_component("Button", &PathBuf::from(temp_dir.path().join("src/components/Button.tsx"))));
-        assert!(graph.has_component("Header", &PathBuf::from(temp_dir.path().join("src/components/Header.tsx"))));
-        assert!(graph.has_component("Home", &PathBuf::from(temp_dir.path().join("src/pages/Home.tsx"))));
+        assert!(graph.has_component(
+            "Button",
+            &PathBuf::from(temp_dir.path().join("src/components/Button.tsx"))
+        ));
+        assert!(graph.has_component(
+            "Header",
+            &PathBuf::from(temp_dir.path().join("src/components/Header.tsx"))
+        ));
+        assert!(graph.has_component(
+            "Home",
+            &PathBuf::from(temp_dir.path().join("src/pages/Home.tsx"))
+        ));
         assert!(graph.has_component("App", &PathBuf::from(temp_dir.path().join("src/index.tsx"))));
     }
 
@@ -161,7 +191,9 @@ mod tests {
     fn test_non_existent_directory() {
         let non_existent_path = Path::new("/path/to/non/existent/directory");
         let mut traverser = ProjectTraverser::new(non_existent_path);
-        let result = traverser.traverse(non_existent_path, &vec![]).map_err(|e| e.to_string());
+        let result = traverser
+            .traverse(non_existent_path, &vec![])
+            .map_err(|e| e.to_string());
 
         let expected_error = format!("Entry point does not exist: {:?}", non_existent_path);
         assert_eq!(result.unwrap_err(), expected_error);
@@ -185,6 +217,12 @@ mod tests {
         let result = traverser.traverse(temp_dir.path().join("src/index.tsx").as_path(), &vec![]);
 
         assert!(result.is_err());
-        assert_eq!(result.err().unwrap().to_string(), format!("Entry point is a file: {:?}", temp_dir.path().join("src/index.tsx")));
+        assert_eq!(
+            result.err().unwrap().to_string(),
+            format!(
+                "Entry point is a file: {:?}",
+                temp_dir.path().join("src/index.tsx")
+            )
+        );
     }
 }

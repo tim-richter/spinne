@@ -26,9 +26,10 @@ fn create_mock_project(files: Vec<(&str, &str)>) -> TempDir {
 
 #[test]
 fn test_cli_with_default_output() {
-    let temp_dir = create_mock_project(vec![
-        ("src/components/Button.tsx", "export function Button() { return <button>Click me</button>; }"),
-    ]);
+    let temp_dir = create_mock_project(vec![(
+        "src/components/Button.tsx",
+        "export function Button() { return <button>Click me</button>; }",
+    )]);
     let mut cmd = Command::cargo_bin("spinne").unwrap();
 
     cmd.current_dir(temp_dir.path())
@@ -44,9 +45,10 @@ fn test_cli_with_default_output() {
 
 #[test]
 fn test_cli_with_console_output() {
-    let temp_dir = create_mock_project(vec![
-        ("src/components/Button.tsx", "export function Button() { return <button>Click me</button>; }"),
-    ]);
+    let temp_dir = create_mock_project(vec![(
+        "src/components/Button.tsx",
+        "export function Button() { return <button>Click me</button>; }",
+    )]);
     let mut cmd = Command::cargo_bin("spinne").unwrap();
 
     cmd.current_dir(temp_dir.path())

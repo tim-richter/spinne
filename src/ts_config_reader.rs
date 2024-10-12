@@ -1,6 +1,6 @@
-use std::path::PathBuf;
+use log::{error, warn};
 use std::fs;
-use log::{warn, error};
+use std::path::PathBuf;
 
 pub struct TsConfigReader;
 
@@ -8,7 +8,9 @@ impl TsConfigReader {
     /// Read the tsconfig.json file and return the baseUrl and paths.
     pub fn read_tsconfig(tsconfig_path: &PathBuf) -> (PathBuf, Vec<(String, Vec<String>)>) {
         if let Ok(content) = fs::read_to_string(tsconfig_path) {
-            if let Some(json) = jsonc_parser::parse_to_serde_value(&content, &Default::default()).unwrap() {
+            if let Some(json) =
+                jsonc_parser::parse_to_serde_value(&content, &Default::default()).unwrap()
+            {
                 let base_url = if let Some(base_url) = json["compilerOptions"]["baseUrl"].as_str() {
                     base_url.to_string()
                 } else {
@@ -58,8 +60,10 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let root = temp_dir.path();
 
-        let tsconfig_path = root.join("tsconfig.json"); 
-        fs::write(&tsconfig_path, r#"
+        let tsconfig_path = root.join("tsconfig.json");
+        fs::write(
+            &tsconfig_path,
+            r#"
             {
                 "compilerOptions": {
                     "baseUrl": ".",
@@ -68,14 +72,16 @@ mod tests {
                     }
                 }
             }
-        "#).unwrap();
+        "#,
+        )
+        .unwrap();
         let (base_url, paths) = TsConfigReader::read_tsconfig(&tsconfig_path);
 
         assert_eq!(base_url, PathBuf::from("."));
         assert_eq!(paths, vec![("@/*".to_string(), vec!["src/*".to_string()])]);
     }
 
-    #[test] 
+    #[test]
     fn test_read_tsconfig_no_file() {
         let temp_dir = TempDir::new().unwrap();
         let root = temp_dir.path();
@@ -87,13 +93,15 @@ mod tests {
         assert_eq!(paths, Vec::new());
     }
 
-    #[test]   
+    #[test]
     fn test_read_tsconfig_no_base_url() {
         let temp_dir = TempDir::new().unwrap();
         let root = temp_dir.path();
 
         let tsconfig_path = root.join("tsconfig.json");
-        fs::write(&tsconfig_path, r#"
+        fs::write(
+            &tsconfig_path,
+            r#"
             {
                 "compilerOptions": {
                     "paths": {
@@ -101,26 +109,32 @@ mod tests {
                     }
                 }
             }
-        "#).unwrap();
-        let (base_url, paths) = TsConfigReader::read_tsconfig(&tsconfig_path);  
+        "#,
+        )
+        .unwrap();
+        let (base_url, paths) = TsConfigReader::read_tsconfig(&tsconfig_path);
 
         assert_eq!(base_url, PathBuf::from(""));
         assert_eq!(paths, vec![("@/*".to_string(), vec!["src/*".to_string()])]);
     }
 
-    #[test] 
+    #[test]
     fn test_read_tsconfig_no_paths() {
         let temp_dir = TempDir::new().unwrap();
         let root = temp_dir.path();
 
-        let tsconfig_path = root.join("tsconfig.json"); 
-        fs::write(&tsconfig_path, r#"
+        let tsconfig_path = root.join("tsconfig.json");
+        fs::write(
+            &tsconfig_path,
+            r#"
             {
                 "compilerOptions": {
                     "baseUrl": "."
                 }
             }
-        "#).unwrap();   
+        "#,
+        )
+        .unwrap();
         let (base_url, paths) = TsConfigReader::read_tsconfig(&tsconfig_path);
 
         assert_eq!(base_url, PathBuf::from("."));
@@ -132,8 +146,10 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let root = temp_dir.path();
 
-        let tsconfig_path = root.join("tsconfig.json"); 
-        fs::write(&tsconfig_path, r#"
+        let tsconfig_path = root.join("tsconfig.json");
+        fs::write(
+            &tsconfig_path,
+            r#"
             {
                 "compilerOptions": {
                     /* comment */
@@ -144,10 +160,12 @@ mod tests {
                     }
                 }
             }
-        "#).unwrap();   
+        "#,
+        )
+        .unwrap();
         let (base_url, paths) = TsConfigReader::read_tsconfig(&tsconfig_path);
 
         assert_eq!(base_url, PathBuf::from("."));
         assert_eq!(paths, vec![("@/*".to_string(), vec!["src/*".to_string()])]);
-    }       
+    }
 }

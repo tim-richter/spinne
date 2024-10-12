@@ -1,9 +1,9 @@
 use clap::Parser;
-use log::info;
-use std::{fs::File, path::PathBuf};
 use colored::*;
 use env_logger::Env;
+use log::info;
 use std::io::Write;
+use std::{fs::File, path::PathBuf};
 
 use spinne::ProjectTraverser;
 
@@ -19,11 +19,16 @@ struct Args {
     file_name: Option<String>,
 
     /// output format
-    #[arg(short, long, default_value =  "file")]
+    #[arg(short, long, default_value = "file")]
     format: Format,
 
     /// Ignore directories in glob patterns (comma separated)
-    #[arg(short, long, value_delimiter = ',', default_value = "**/node_modules/**,**/dist/**,**/build/**")]
+    #[arg(
+        short,
+        long,
+        value_delimiter = ',',
+        default_value = "**/node_modules/**,**/dist/**,**/build/**"
+    )]
     ignore: Vec<String>,
 
     /// Sets the level of logging
@@ -64,29 +69,14 @@ fn main() -> std::io::Result<()> {
 
             // Assign colors based on log level
             let level_str = match level {
-                log::Level::Error => {
-                    "ERROR".red().bold().to_string()
-                }
-                log::Level::Warn => {
-                    "WARN".yellow().bold().to_string()
-                }
-                log::Level::Info => {
-                    "INFO".green().bold().to_string()
-                }
-                log::Level::Debug => {
-                    "DEBUG".blue().bold().to_string()
-                }
-                log::Level::Trace => {
-                    "TRACE".purple().bold().to_string()
-                }
+                log::Level::Error => "ERROR".red().bold().to_string(),
+                log::Level::Warn => "WARN".yellow().bold().to_string(),
+                log::Level::Info => "INFO".green().bold().to_string(),
+                log::Level::Debug => "DEBUG".blue().bold().to_string(),
+                log::Level::Trace => "TRACE".purple().bold().to_string(),
             };
 
-            writeln!(
-                buf,
-                "{}: {}",
-                level_str,
-                record.args()
-            )
+            writeln!(buf, "{}: {}", level_str, record.args())
         })
         .init();
 
@@ -94,7 +84,7 @@ fn main() -> std::io::Result<()> {
 
     let mut traverser = ProjectTraverser::new(&absolute_entry);
     let component_graph = traverser.traverse(&args.entry, &args.ignore)?;
-    
+
     let file_name = args.file_name.unwrap();
 
     // output to json file in current working directory

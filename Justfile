@@ -9,3 +9,6 @@ docs:
 
 docs-open:
   cargo doc --open
+
+format:
+  cargo fmt
