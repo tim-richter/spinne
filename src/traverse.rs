@@ -1,20 +1,27 @@
-use std::fs;
+use std::{fs, sync::Arc};
 use std::path::Path;
+use log::debug;
 use swc_ecma_parser::{lexer::Lexer, Parser, StringInput, Syntax, TsSyntax};
 
 use swc_ecma_visit::Visit;
 
-use crate::{component_graph::ComponentGraph, file_visitor::FileVisitor};
+use crate::{component_graph::ComponentGraph, file_visitor::FileVisitor, config::Config, ts_config_reader::TsConfigReader};
 
 /// ProjectTraverser is responsible for traversing the project and analyzing TypeScript files
 pub struct ProjectTraverser {
     component_graph: ComponentGraph,
+    config: Arc<Config>,
 }
 
 impl ProjectTraverser {
-    pub fn new() -> Self {
+    pub fn new(project_root: &Path) -> Self {
+        let tsconfig_path = project_root.join("tsconfig.json");
+        let (base_url, paths) = TsConfigReader::read_tsconfig(&tsconfig_path);
+        let config = Config::new(base_url, paths);
+
         Self {
             component_graph: ComponentGraph::new(),
+            config,
         }
     }
 
@@ -26,12 +33,13 @@ impl ProjectTraverser {
 
     /// Traverse the directory and analyze TypeScript files
     fn traverse_directory(&mut self, dir: &Path, ignore: &[String]) -> std::io::Result<()> {
+        debug!("Traversing directory: {:?}", dir);
         if !dir.exists() {
-            return Err(std::io::Error::new(std::io::ErrorKind::NotFound, format!("No such file or directory (os error 2)")));
+            return Err(std::io::Error::new(std::io::ErrorKind::NotFound, format!("Entry point does not exist: {:?}", dir)));
         }
 
         if dir.is_file() {
-            return Err(std::io::Error::new(std::io::ErrorKind::Other, format!("Not a directory")));
+            return Err(std::io::Error::new(std::io::ErrorKind::Other, format!("Entry point is a file: {:?}", dir)));
         }
 
         if dir.is_dir() {
@@ -61,7 +69,7 @@ impl ProjectTraverser {
         let source_code = fs::read_to_string(file_path)?;
         let module = ProjectTraverser::parse_typescript(&source_code);
 
-        let mut visitor = FileVisitor::new(file_path.to_str().unwrap().to_string(), &mut self.component_graph, file_path.parent().unwrap().to_path_buf());
+        let mut visitor = FileVisitor::new(file_path.to_str().unwrap().to_string(), &mut self.component_graph, self.config.clone());
         visitor.visit_module(&module);
 
         Ok(())
@@ -125,7 +133,7 @@ mod tests {
     #[test]
     fn test_project_traverser() {
         let temp_dir = create_mock_project();
-        let mut traverser = ProjectTraverser::new();
+        let mut traverser = ProjectTraverser::new(temp_dir.path());
         let result = traverser.traverse(temp_dir.path(), &vec![]);
 
         assert!(result.is_ok());
@@ -141,7 +149,7 @@ mod tests {
     #[test]
     fn test_empty_directory() {
         let temp_dir = TempDir::new().unwrap();
-        let mut traverser = ProjectTraverser::new();
+        let mut traverser = ProjectTraverser::new(temp_dir.path());
         let result = traverser.traverse(temp_dir.path(), &vec![]);
 
         assert!(result.is_ok());
@@ -152,7 +160,7 @@ mod tests {
     #[test]
     fn test_non_existent_directory() {
         let non_existent_path = Path::new("/path/to/non/existent/directory");
-        let mut traverser = ProjectTraverser::new();
+        let mut traverser = ProjectTraverser::new(non_existent_path);
         let result = traverser.traverse(non_existent_path, &vec![]).map_err(|e| e.to_string());
 
         let expected_error = format!("No such file or directory (os error 2)");
@@ -162,7 +170,7 @@ mod tests {
     #[test]
     fn test_ignore_directory() {
         let temp_dir = create_mock_project();
-        let mut traverser = ProjectTraverser::new();
+        let mut traverser = ProjectTraverser::new(temp_dir.path());
         let result = traverser.traverse(temp_dir.path(), &vec!["**/src/**".to_string()]);
 
         assert!(result.is_ok());
@@ -173,7 +181,7 @@ mod tests {
     #[test]
     fn test_should_not_traverse_file() {
         let temp_dir = create_mock_project();
-        let mut traverser = ProjectTraverser::new();
+        let mut traverser = ProjectTraverser::new(temp_dir.path());
         let result = traverser.traverse(temp_dir.path().join("src/index.tsx").as_path(), &vec![]);
 
         assert!(result.is_err());
