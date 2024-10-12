@@ -99,7 +99,8 @@ fn main() -> std::io::Result<()> {
 
     // output to json file in current working directory
     if args.format == Format::File {
-        let output_path_with_extension = format!("{}.json", file_name);
+        let current_dir = std::env::current_dir()?;
+        let output_path_with_extension = current_dir.join(format!("{}.json", file_name));
         info!("Writing report to: {:?}", output_path_with_extension);
         let file = File::create(output_path_with_extension)?;
         serde_json::to_writer_pretty(file, &component_graph.to_serializable())?;

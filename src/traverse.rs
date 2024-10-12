@@ -163,7 +163,7 @@ mod tests {
         let mut traverser = ProjectTraverser::new(non_existent_path);
         let result = traverser.traverse(non_existent_path, &vec![]).map_err(|e| e.to_string());
 
-        let expected_error = format!("No such file or directory (os error 2)");
+        let expected_error = format!("Entry point does not exist: {:?}", non_existent_path);
         assert_eq!(result.unwrap_err(), expected_error);
     }
 
@@ -185,6 +185,6 @@ mod tests {
         let result = traverser.traverse(temp_dir.path().join("src/index.tsx").as_path(), &vec![]);
 
         assert!(result.is_err());
-        assert_eq!(result.err().unwrap().to_string(), "Not a directory");
+        assert_eq!(result.err().unwrap().to_string(), format!("Entry point is a file: {:?}", temp_dir.path().join("src/index.tsx")));
     }
 }

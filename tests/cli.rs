@@ -31,13 +31,12 @@ fn test_cli_with_default_output() {
     ]);
     let mut cmd = Command::cargo_bin("spinne").unwrap();
 
-    cmd.arg("-e")
+    cmd.current_dir(temp_dir.path())
+        .arg("-e")
         .arg(temp_dir.path().join("src"))
-        .arg("-o")
-        .arg(temp_dir.path().join("spinne-report"))
         .assert()
         .success()
-        .stdout(predicate::str::contains("Writing report to:"));
+        .stderr(predicate::str::contains("Writing report to:"));
 
     // Check if the output file is created
     assert!(temp_dir.path().join("spinne-report.json").exists());
@@ -50,15 +49,14 @@ fn test_cli_with_console_output() {
     ]);
     let mut cmd = Command::cargo_bin("spinne").unwrap();
 
-    cmd.arg("-e")
-        .arg(temp_dir.path().join("src"))
-        .arg("-o")
-        .arg(temp_dir.path().join("spinne-report.json"))
+    cmd.current_dir(temp_dir.path())
+        .arg("-e")
+        .arg("src")
         .arg("-f")
         .arg("console")
         .assert()
         .success()
-        .stdout(predicate::str::contains("Printing report to console:"))
+        .stderr(predicate::str::contains("Printing report to console:"))
         .stdout(predicate::str::contains("Button"));
 
     // Check that no output file is created
@@ -73,8 +71,9 @@ fn test_cli_with_ignore_option() {
     ]);
     let mut cmd = Command::cargo_bin("spinne").unwrap();
 
-    cmd.arg("-e")
-        .arg(temp_dir.path().join("src"))
+    cmd.current_dir(temp_dir.path())
+        .arg("-e")
+        .arg("src")
         .arg("-i")
         .arg("**/components/**")
         .arg("-f")

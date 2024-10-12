@@ -138,12 +138,12 @@ impl<'a> FileVisitor<'a> {
 }
 
 impl<'a> Visit for FileVisitor<'a> {
-    fn visit_module(&mut self, n: &swc_ecma_ast::Module) {
+    fn visit_module(&mut self, n: &swc_ecma_visit::swc_ecma_ast::Module) {
         n.visit_children_with(self);
     }
 
     /// Visits function declarations and checks if they are React components.
-    fn visit_fn_decl(&mut self, n: &FnDecl) {
+    fn visit_fn_decl(&mut self, n: &swc_ecma_visit::swc_ecma_ast::FnDecl) {
         if self.is_component(&n.ident) {
             let component_name = n.ident.sym.to_string();
             
@@ -259,15 +259,20 @@ mod tests {
 
     #[test]
     fn test_detect_function_component() {
+        let temp_dir = TempDir::new().unwrap();
+        let root = temp_dir.path();
+
+        let my_component_file_path = root.join("MyComponent.tsx");
         let code = r#"
             function MyComponent() {
                 return <div>Hello</div>;
             }
         "#;
+        fs::write(&my_component_file_path, code).unwrap();
 
         let module = parse_module(code);
         let mut component_graph = ComponentGraph::new();
-        let mut visitor = FileVisitor::new(String::new(), &mut component_graph, Config::new(PathBuf::from("."), Vec::new()));
+        let mut visitor = FileVisitor::new(my_component_file_path.display().to_string(), &mut component_graph, Config::new(PathBuf::from("."), Vec::new()));
         visitor.visit_module(&module);
 
         assert!(visitor.component_graph.has_component("MyComponent", &visitor.file_path));
@@ -276,6 +281,10 @@ mod tests {
 
     #[test]
     fn test_detect_function_component_with_children_components() {
+        let temp_dir = TempDir::new().unwrap();
+        let root = temp_dir.path();
+
+        let my_component_file_path = root.join("MyComponent.tsx");
         let code = r#"
             function MyComponent() {
                 return <ChildComponent />;
@@ -285,10 +294,11 @@ mod tests {
                 return <div>Child</div>;
             }
         "#;
+        fs::write(&my_component_file_path, code).unwrap();
 
         let module = parse_module(code);
         let mut component_graph = ComponentGraph::new();
-        let mut visitor = FileVisitor::new(String::new(), &mut component_graph, Config::new(PathBuf::from("."), Vec::new()));
+        let mut visitor = FileVisitor::new(my_component_file_path.display().to_string(), &mut component_graph, Config::new(PathBuf::from("."), Vec::new()));
         visitor.visit_module(&module);
 
         assert!(visitor.component_graph.has_component("MyComponent", &visitor.file_path));
@@ -325,14 +335,19 @@ mod tests {
 
     #[test]
     fn test_assign_component() {
+        let temp_dir = TempDir::new().unwrap();
+        let root = temp_dir.path();
+
+        let my_component_file_path = root.join("MyComponent.tsx");
         let code = r#"
             let MyComponent = () => <div>Hello</div>;
             const MyComponent2 = () => <div>Hello</div>;
         "#;
+        fs::write(&my_component_file_path, code).unwrap();
 
         let module = parse_module(code);
         let mut component_graph = ComponentGraph::new();
-        let mut visitor = FileVisitor::new(String::new(), &mut component_graph, Config::new(PathBuf::from("."), Vec::new()));
+        let mut visitor = FileVisitor::new(my_component_file_path.display().to_string(), &mut component_graph, Config::new(PathBuf::from("."), Vec::new()));
         visitor.visit_module(&module);
 
         assert!(visitor.component_graph.has_component("MyComponent", &visitor.file_path));
@@ -348,20 +363,24 @@ mod tests {
         let file_path = root.join("Button.tsx");
         fs::write(&file_path, "export function Button() { return <button>Click me</button>; }").unwrap();
 
+        let my_component_file_path = root.join("MyComponent.tsx");
         let code = r#"
-            import { Button } from "./Button.tsx";
+            import { Button } from "./Button";
 
             function MyComponent() {
                 return <Button />;
             }
         "#;
+        fs::write(&my_component_file_path, code).unwrap();
 
         let module = parse_module(code);
         let mut component_graph = ComponentGraph::new();
-        let mut visitor = FileVisitor::new(String::new(), &mut component_graph, Config::new(PathBuf::from("."), Vec::new()));
+        let mut visitor = FileVisitor::new(my_component_file_path.display().to_string(), &mut component_graph, Config::new(PathBuf::from("."), Vec::new()));
         visitor.visit_module(&module);
 
-        assert!(visitor.component_graph.has_component("MyComponent", &visitor.file_path));
+        println!("{:?}", visitor.component_graph);
+
+        assert!(visitor.component_graph.has_component("MyComponent", &my_component_file_path));
         assert!(visitor.component_graph.has_component("Button", &file_path));
         assert!(visitor.component_graph.graph.node_count() == 2);
     }
@@ -371,10 +390,12 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let root = temp_dir.path();
 
+        fs::create_dir_all(root.join("components")).unwrap();
+
         let file_path = root.join("components/Button.tsx");
-        fs::create_dir_all(file_path.parent().unwrap()).unwrap();
         fs::write(&file_path, "export function Button() { return <button>Click me</button>; }").unwrap();
 
+        let my_component_file_path = root.join("MyComponent.tsx");
         let code = r#"
             import { Button } from "./components/Button.tsx";
 
@@ -382,13 +403,14 @@ mod tests {
                 return <Button />;
             }
         "#;
+        fs::write(&my_component_file_path, code).unwrap();
 
         let module = parse_module(code);
         let mut component_graph = ComponentGraph::new();
-        let mut visitor = FileVisitor::new(String::new(), &mut component_graph, Config::new(PathBuf::from("."), Vec::new()));
+        let mut visitor = FileVisitor::new(my_component_file_path.display().to_string(), &mut component_graph, Config::new(PathBuf::from("."), Vec::new()));
         visitor.visit_module(&module);
 
-        assert!(visitor.component_graph.has_component("MyComponent", &visitor.file_path));
+        assert!(visitor.component_graph.has_component("MyComponent", &my_component_file_path));
         assert!(visitor.component_graph.has_component("Button", &file_path));
         assert!(visitor.component_graph.graph.node_count() == 2);
     }
