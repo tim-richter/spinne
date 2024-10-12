@@ -36,6 +36,8 @@ spinne -o console
 
 | Option | Description | Options | Default |
 | --- | --- | --- | --- |
-| `-e, --entry <path>` | entry point directory | Path | current directory |
-| `-o, --output <format>` | define the output type | `file`, `console` | file |
+| `-e, --entry <path>` | entry point directory | Path | current directory (./) |
+| `-f, --format <format>` | define the output format | `file`, `console` | file |
 | `-i, --ignore <path>` | define ignored folders | comma separated glob patterns | `**/node_modules/**,**/dist/**,**/build/**` |
+| `--file-name <file-name>` | define the output file name | String | `spinne-report` |
+| `-l, --log-level <log-level>` | define the log level | `error`, `warn`, `info`, `debug`, `trace` | `info` |

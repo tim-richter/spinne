@@ -15,8 +15,8 @@ struct Args {
     entry: PathBuf,
 
     /// Output file name
-    #[arg(short, long, default_value = "spinne-report")]
-    output: Option<String>,
+    #[arg(long, default_value = "spinne-report")]
+    file_name: Option<String>,
 
     /// output format
     #[arg(short, long, default_value =  "file")]
@@ -95,11 +95,11 @@ fn main() -> std::io::Result<()> {
     let mut traverser = ProjectTraverser::new(&absolute_entry);
     let component_graph = traverser.traverse(&args.entry, &args.ignore)?;
     
-    let output = args.output.unwrap();
+    let file_name = args.file_name.unwrap();
 
     // output to json file in current working directory
     if args.format == Format::File {
-        let output_path_with_extension = format!("{}.json", output);
+        let output_path_with_extension = format!("{}.json", file_name);
         info!("Writing report to: {:?}", output_path_with_extension);
         let file = File::create(output_path_with_extension)?;
         serde_json::to_writer_pretty(file, &component_graph.to_serializable())?;
