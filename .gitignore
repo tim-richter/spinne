@@ -1,4 +1,7 @@
-/target
+target/
+debug/
 .DS_Store
 .idea
 .vscode
+**/*.rs.bk
+*.pdb
