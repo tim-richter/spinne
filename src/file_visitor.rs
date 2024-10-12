@@ -99,11 +99,11 @@ impl<'a> FileVisitor<'a> {
                 if let ModuleItem::ModuleDecl(ModuleDecl::ExportDecl(export_decl)) = item {
                     if let Decl::Var(var_decl) = &export_decl.decl {
                         for decl in &var_decl.decls {
-                            if let Pat::Ident(ident) = &decl.name {
+                            if let Pat::Ident(_ident) = &decl.name {
                                 return Some(path.clone());
                             }
                         }
-                    } else if let Decl::Fn(fn_decl) = &export_decl.decl {
+                    } else if let Decl::Fn(_) = &export_decl.decl {
                         return Some(path.clone());
                     }
                 } else if let ModuleItem::ModuleDecl(ModuleDecl::ExportNamed(export_named)) = item {
@@ -160,7 +160,7 @@ impl<'a> Visit for FileVisitor<'a> {
     fn visit_var_decl(&mut self, n: &VarDecl) {
         for decl in &n.decls {
             if let Some(init) = &decl.init {
-                if let Expr::Arrow(arrow_expr) = &**init {
+                if let Expr::Arrow(_arrow_expr) = &**init {
                     if let Pat::Ident(ident) = &decl.name {
                         if self.is_component(&ident.id) {
                             let component_name = ident.id.sym.to_string();
@@ -238,8 +238,6 @@ impl<'a> Visit for FileVisitor<'a> {
 
 #[cfg(test)]
 mod tests {
-    use crate::TsConfigReader;
-
     use super::*;
     use swc_ecma_parser::{lexer::Lexer, Parser, StringInput, Syntax, TsSyntax};
     use tempfile::TempDir;
