@@ -32,7 +32,7 @@ fn should_resolve_imports_correctly_with_multiple_files() {
       ("src/MyComponent2.tsx", "import { Button } from './components/Button'; function MyComponent2() { return <Button />; }"),
     ]);
     
-    let mut traverser = ProjectTraverser::new();
+    let mut traverser = ProjectTraverser::new(&temp_dir.path());
     let component_graph = traverser.traverse(&temp_dir.path().join("src"), &vec![]).unwrap();
 
     assert!(component_graph.has_component("MyComponent", &temp_dir.path().join("src/MyComponent.tsx")));
