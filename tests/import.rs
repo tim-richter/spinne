@@ -33,7 +33,7 @@ fn should_resolve_imports_correctly_with_multiple_files() {
 
     let mut traverser = ProjectTraverser::new(&temp_dir.path());
     let component_graph = traverser
-        .traverse(&temp_dir.path().join("src"), &vec![])
+        .traverse(&temp_dir.path().join("src"), &vec![], &vec!["**/*.tsx".to_string()])
         .unwrap();
 
     assert!(
@@ -97,7 +97,7 @@ fn should_resolve_imports_with_relative_and_tsconfig_paths_correctly() {
 
     let mut traverser = ProjectTraverser::new(&temp_dir.path());
     let component_graph = traverser
-        .traverse(&temp_dir.path().join("src"), &vec![])
+        .traverse(&temp_dir.path().join("src"), &vec![], &vec!["**/*.tsx".to_string()])
         .unwrap();
 
     assert!(

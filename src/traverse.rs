@@ -1,6 +1,6 @@
 use ignore::overrides::OverrideBuilder;
 use ignore::WalkBuilder;
-use log::debug;
+use log::{debug, error};
 use std::path::Path;
 use std::{fs, sync::Arc};
 use swc_ecma_parser::{lexer::Lexer, Parser, StringInput, Syntax, TsSyntax};
@@ -36,13 +36,14 @@ impl ProjectTraverser {
         &mut self,
         entry_point: &Path,
         exclude: &[String],
+        include: &[String],
     ) -> std::io::Result<&ComponentGraph> {
-        self.traverse_directory(entry_point, exclude)?;
+        self.traverse_directory(entry_point, exclude, include)?;
         Ok(&self.component_graph)
     }
 
     /// Traverse the directory and analyze TypeScript files
-    fn traverse_directory(&mut self, dir: &Path, exclude: &[String]) -> std::io::Result<()> {
+    fn traverse_directory(&mut self, dir: &Path, exclude: &[String], include: &[String]) -> std::io::Result<()> {
         debug!("Traversing directory: {:?}", dir);
 
         if !dir.exists() {
@@ -65,6 +66,10 @@ impl ProjectTraverser {
             .collect();
 
         let mut override_builder = OverrideBuilder::new(dir);
+
+        for pattern in include {
+            override_builder.add(pattern).unwrap();
+        }
         for pattern in &exclude_patterns {
             override_builder.add(pattern).unwrap();
         }
@@ -79,15 +84,11 @@ impl ProjectTraverser {
             match result {
                 Ok(entry) => {
                     let path = entry.path();
-                    println!("{:?}", path);
+                    debug!("Analyzing file: {:?}", path);
 
-                    if let Some(extension) = path.extension() {
-                        if extension == "tsx" {
-                            self.analyze_file(&path)?;
-                        }
-                    }
+                    self.analyze_file(&path)?;
                 }
-                Err(e) => println!("Error: {:?}", e),
+                Err(e) => error!("Error: {:?}", e),
             }
         }
 
@@ -170,7 +171,7 @@ mod tests {
     fn test_project_traverser() {
         let temp_dir = create_mock_project();
         let mut traverser = ProjectTraverser::new(temp_dir.path());
-        let result = traverser.traverse(temp_dir.path(), &vec![]);
+        let result = traverser.traverse(temp_dir.path(), &vec![], &vec!["**/*.tsx".to_string()]);
 
         assert!(result.is_ok());
         let graph = result.unwrap();
@@ -200,7 +201,7 @@ mod tests {
     fn test_empty_directory() {
         let temp_dir = TempDir::new().unwrap();
         let mut traverser = ProjectTraverser::new(temp_dir.path());
-        let result = traverser.traverse(temp_dir.path(), &vec![]);
+        let result = traverser.traverse(temp_dir.path(), &vec![], &vec!["**/*.tsx".to_string()]);
 
         assert!(result.is_ok());
         let graph = result.unwrap();
@@ -212,7 +213,7 @@ mod tests {
         let non_existent_path = Path::new("/path/to/non/existent/directory");
         let mut traverser = ProjectTraverser::new(non_existent_path);
         let result = traverser
-            .traverse(non_existent_path, &vec![])
+            .traverse(non_existent_path, &vec![], &vec!["**/*.tsx".to_string()])
             .map_err(|e| e.to_string());
 
         let expected_error = format!("Entry point does not exist: {:?}", non_existent_path);
@@ -223,7 +224,7 @@ mod tests {
     fn test_ignore_directory() {
         let temp_dir = create_mock_project();
         let mut traverser = ProjectTraverser::new(temp_dir.path());
-        let result = traverser.traverse(temp_dir.path(), &vec!["**/src/**".to_string()]);
+        let result = traverser.traverse(temp_dir.path(), &vec!["**/src/**".to_string()], &vec!["**/*.tsx".to_string()]);
 
         assert!(result.is_ok());
         let graph = result.unwrap();
@@ -234,7 +235,7 @@ mod tests {
     fn test_ignore_file() {
         let temp_dir = create_mock_project();
         let mut traverser = ProjectTraverser::new(temp_dir.path());
-        let result = traverser.traverse(temp_dir.path(), &vec!["**/Box.tsx".to_string()]);
+        let result = traverser.traverse(temp_dir.path(), &vec!["**/Box.tsx".to_string()], &vec!["**/*.tsx".to_string()]);
 
         assert!(result.is_ok());
         let graph = result.unwrap();
@@ -245,7 +246,7 @@ mod tests {
     fn test_should_not_traverse_file() {
         let temp_dir = create_mock_project();
         let mut traverser = ProjectTraverser::new(temp_dir.path());
-        let result = traverser.traverse(temp_dir.path().join("src/index.tsx").as_path(), &vec![]);
+        let result = traverser.traverse(temp_dir.path().join("src/index.tsx").as_path(), &vec![], &vec!["**/*.tsx".to_string()]);
 
         assert!(result.is_err());
         assert_eq!(
