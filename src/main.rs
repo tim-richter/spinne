@@ -22,14 +22,13 @@ struct Args {
     #[arg(short, long, default_value = "file")]
     format: Format,
 
-    /// Ignore directories in glob patterns (comma separated)
+    /// Exclude directories in glob patterns (comma separated)
     #[arg(
-        short,
         long,
         value_delimiter = ',',
-        default_value = "**/node_modules/**,**/dist/**,**/build/**"
+        default_value = "**/node_modules/**,**/dist/**,**/build/**,**/*.stories.tsx,**/*.test.tsx"
     )]
-    ignore: Vec<String>,
+    exclude: Vec<String>,
 
     /// Sets the level of logging
     #[arg(short, long, default_value = "info")]
@@ -83,7 +82,7 @@ fn main() -> std::io::Result<()> {
     let absolute_entry = std::fs::canonicalize(&args.entry)?;
 
     let mut traverser = ProjectTraverser::new(&absolute_entry);
-    let component_graph = traverser.traverse(&args.entry, &args.ignore)?;
+    let component_graph = traverser.traverse(&args.entry, &args.exclude)?;
 
     let file_name = args.file_name.unwrap();
 

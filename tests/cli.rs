@@ -76,7 +76,7 @@ fn test_cli_with_ignore_option() {
     cmd.current_dir(temp_dir.path())
         .arg("-e")
         .arg("src")
-        .arg("-i")
+        .arg("--exclude")
         .arg("**/components/**")
         .arg("-f")
         .arg("console")
@@ -109,7 +109,7 @@ fn test_cli_with_ignore_multiple_directories() {
 
     cmd.arg("-e")
         .arg(temp_dir.path().join("src"))
-        .arg("-i")
+        .arg("--exclude")
         .arg("**/components/**,**/pages/**")
         .arg("-f")
         .arg("console")

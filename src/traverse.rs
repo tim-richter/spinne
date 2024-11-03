@@ -1,3 +1,5 @@
+use ignore::overrides::OverrideBuilder;
+use ignore::WalkBuilder;
 use log::debug;
 use std::path::Path;
 use std::{fs, sync::Arc};
@@ -33,15 +35,16 @@ impl ProjectTraverser {
     pub fn traverse(
         &mut self,
         entry_point: &Path,
-        ignore: &[String],
+        exclude: &[String],
     ) -> std::io::Result<&ComponentGraph> {
-        self.traverse_directory(entry_point, ignore)?;
+        self.traverse_directory(entry_point, exclude)?;
         Ok(&self.component_graph)
     }
 
     /// Traverse the directory and analyze TypeScript files
-    fn traverse_directory(&mut self, dir: &Path, ignore: &[String]) -> std::io::Result<()> {
+    fn traverse_directory(&mut self, dir: &Path, exclude: &[String]) -> std::io::Result<()> {
         debug!("Traversing directory: {:?}", dir);
+
         if !dir.exists() {
             return Err(std::io::Error::new(
                 std::io::ErrorKind::NotFound,
@@ -56,25 +59,35 @@ impl ProjectTraverser {
             ));
         }
 
-        if dir.is_dir() {
-            for entry in fs::read_dir(dir)? {
-                let entry = entry?;
-                let path = entry.path();
+        let exclude_patterns: Vec<String> = exclude
+            .iter()
+            .map(|pattern| format!("!{}", pattern)) // Add '!' to each pattern
+            .collect();
 
-                if ignore
-                    .iter()
-                    .any(|pattern| glob::Pattern::new(pattern).unwrap().matches_path(&path))
-                {
-                    continue;
-                }
+        let mut override_builder = OverrideBuilder::new(dir);
+        for pattern in &exclude_patterns {
+            override_builder.add(pattern).unwrap();
+        }
+        let overrides = override_builder.build().unwrap();
 
-                if path.is_dir() {
-                    self.traverse_directory(&path, ignore)?;
-                } else if let Some(extension) = path.extension() {
-                    if extension == "tsx" {
-                        self.analyze_file(&path)?;
+        let walker = WalkBuilder::new(dir)
+            .git_ignore(true)
+            .overrides(overrides)
+            .build();
+
+        for result in walker {
+            match result {
+                Ok(entry) => {
+                    let path = entry.path();
+                    println!("{:?}", path);
+
+                    if let Some(extension) = path.extension() {
+                        if extension == "tsx" {
+                            self.analyze_file(&path)?;
+                        }
                     }
                 }
+                Err(e) => println!("Error: {:?}", e),
             }
         }
 
@@ -137,6 +150,7 @@ mod tests {
             ("src/components/Header.tsx", "import { Button } from './Button'; export function Header() { return <header><Button /></header>; }"),
             ("src/pages/Home.tsx", "import { Header } from '../components/Header'; export function Home() { return <div><Header /><main>Welcome</main></div>; }"),
             ("src/index.tsx", "import { Home } from './pages/Home'; export function App() { return <Home />; }"),
+            ("src/components/Box.tsx", "export function Box() { return <div>Box</div>; }"),
         ];
 
         for (path, content) in files {
@@ -175,6 +189,11 @@ mod tests {
             &PathBuf::from(temp_dir.path().join("src/pages/Home.tsx"))
         ));
         assert!(graph.has_component("App", &PathBuf::from(temp_dir.path().join("src/index.tsx"))));
+        assert!(graph.has_component(
+            "Box",
+            &PathBuf::from(temp_dir.path().join("src/components/Box.tsx"))
+        ));
+        assert_eq!(graph.graph.node_count(), 5);
     }
 
     #[test]
@@ -209,6 +228,17 @@ mod tests {
         assert!(result.is_ok());
         let graph = result.unwrap();
         assert_eq!(graph.graph.node_count(), 0);
+    }
+
+    #[test]
+    fn test_ignore_file() {
+        let temp_dir = create_mock_project();
+        let mut traverser = ProjectTraverser::new(temp_dir.path());
+        let result = traverser.traverse(temp_dir.path(), &vec!["**/Box.tsx".to_string()]);
+
+        assert!(result.is_ok());
+        let graph = result.unwrap();
+        assert_eq!(graph.graph.node_count(), 4);
     }
 
     #[test]
