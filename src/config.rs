@@ -1,6 +1,7 @@
 use std::path::PathBuf;
 use std::sync::Arc;
 
+/// Config is the global configuration for the spinne tool.
 pub struct Config {
     pub base_url: PathBuf,
     pub paths: Vec<(String, Vec<String>)>,

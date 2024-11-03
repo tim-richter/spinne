@@ -2,6 +2,7 @@ use log::{error, warn};
 use std::fs;
 use std::path::PathBuf;
 
+/// Handles interactions with tsconfig.json
 pub struct TsConfigReader;
 
 impl TsConfigReader {

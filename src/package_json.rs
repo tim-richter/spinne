@@ -3,12 +3,12 @@ use serde_json::Value;
 use std::fs;
 use log::{debug, warn};
 
+/// Handles interactions with package.json
 #[derive(Debug, Clone)]
 pub struct PackageJson {
     content: Value,
 }
 
-/// Handles interactions with package.json
 impl PackageJson {
     /// Creates a new PackageJson instance by reading package.json from the current directory
     pub fn read() -> Option<Self> {

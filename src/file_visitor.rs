@@ -10,6 +10,8 @@ use swc_ecma_loader::{
 };
 use swc_ecma_visit::{Visit, VisitWith};
 
+/// FileVisitor is a visitor for TypeScript files.
+/// It traverses the file system and updates the component graph.
 pub struct FileVisitor<'a> {
     pub component_graph: &'a mut ComponentGraph,
     pub imports: HashMap<String, String>,

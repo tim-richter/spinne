@@ -9,6 +9,8 @@ pub struct Component {
     pub prop_usage: HashMap<String, usize>,
 }
 
+/// ComponentGraph is a graph of components and their relationships.
+/// Components are nodes and relationships are edges.
 #[derive(Debug)]
 pub struct ComponentGraph {
     pub graph: Graph<Component, ()>,
