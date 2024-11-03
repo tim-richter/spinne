@@ -120,3 +120,26 @@ fn test_cli_with_ignore_multiple_directories() {
         .stdout(predicate::str::contains("Home"))
         .stdout(predicate::str::contains("App"));
 }
+
+#[test]
+fn test_cli_with_include_option() {
+    let temp_dir = create_mock_project(vec![(
+        "src/components/Button.tsx",
+        "export function Button() { return <button>Click me</button>; }",
+    ), (
+        "src/pages/Home.tsx",
+        "import { Header } from '../components/Header'; export function Home() { return <div><Header /><main>Welcome</main></div>; }",
+    )]);
+    let mut cmd = Command::cargo_bin("spinne").unwrap();
+
+    cmd.arg("-e")
+        .arg(temp_dir.path())
+        .arg("--include")
+        .arg("**/pages/**/*.tsx")
+        .arg("-f")
+        .arg("console")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Home"))
+        .stdout(predicate::str::contains("Button").not());
+}   

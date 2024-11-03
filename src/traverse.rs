@@ -84,11 +84,13 @@ impl ProjectTraverser {
             match result {
                 Ok(entry) => {
                     let path = entry.path();
-                    debug!("Analyzing file: {:?}", path);
 
-                    self.analyze_file(&path)?;
+                    if path.is_file() {
+                        debug!("Analyzing file: {:?}", path);
+                        self.analyze_file(&path)?;
+                    }
                 }
-                Err(e) => error!("Error: {:?}", e),
+                Err(e) => error!("Error while traversing: {:?}", e),
             }
         }
 
