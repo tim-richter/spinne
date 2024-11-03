@@ -454,13 +454,20 @@ mod tests {
         );
         visitor.visit_module(&module);
 
-        println!("{:?}", visitor.component_graph);
-
         assert!(visitor
             .component_graph
             .has_component("MyComponent", &my_component_file_path));
         assert!(visitor.component_graph.has_component("Button", &file_path));
         assert!(visitor.component_graph.graph.node_count() == 2);
+        assert!(visitor
+            .component_graph
+            .graph
+            .edges(visitor
+                .component_graph
+                .get_component("MyComponent", &my_component_file_path)
+                .unwrap())
+            .count()
+            == 1);
     }
 
     #[test]
@@ -479,7 +486,7 @@ mod tests {
 
         let my_component_file_path = root.join("MyComponent.tsx");
         let code = r#"
-            import { Button } from "./components/Button.tsx";
+            import { Button } from "./components/Button";
 
             function MyComponent() {
                 return <Button />;
@@ -699,14 +706,22 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let root = temp_dir.path();
 
-        let file_path = root.join("Button.tsx");
+        let button_file_path = root.join("Button.tsx");
+        fs::write(
+            &button_file_path,
+            "export function Button() { return <button>Click me</button>; }",
+        )
+        .unwrap();
+
+        let file_path = root.join("MyComponent.tsx");
         let code = r#"
             import { useState } from "react";
             import { blah } from "./blah";
             import "./styles.css";
             import * as NonExistent from "./NonExistent";
+            import { Button } from "./Button";
 
-            export function Button() { return <button>Click me</button>; }
+            export function MyComponent() { return <Button />; }
         "#;
         fs::write(&file_path, code).unwrap();
 
@@ -719,7 +734,13 @@ mod tests {
         );
         visitor.visit_module(&module);
 
-        assert_eq!(visitor.component_graph.graph.node_count(), 1);
+        assert_eq!(visitor.component_graph.graph.node_count(), 2);
+        assert!(visitor
+            .component_graph
+            .has_component("MyComponent", &file_path));
+        assert!(visitor
+            .component_graph
+            .has_component("Button", &button_file_path));
     }
 
     #[test]

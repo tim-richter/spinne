@@ -20,6 +20,7 @@ impl ProjectTraverser {
     pub fn new(project_root: &Path) -> Self {
         let tsconfig_path = project_root.join("tsconfig.json");
         let (base_url, paths) = TsConfigReader::read_tsconfig(&tsconfig_path);
+
         let config = Config::new(base_url, paths);
 
         Self {
