@@ -41,3 +41,5 @@ spinne -o console
 | `-i, --ignore <path>` | define ignored folders | comma separated glob patterns | `**/node_modules/**,**/dist/**,**/build/**` |
 | `--file-name <file-name>` | define the output file name | String | `spinne-report` |
 | `-l, --log-level <log-level>` | define the log level | `error`, `warn`, `info`, `debug`, `trace` | `info` |
+| `--include <include>` | define a glob pattern to include | comma separated glob patterns | `**/*.tsx` |
+| `--exclude <exclude>` | define a glob pattern to exclude | comma separated glob patterns | `**/node_modules/**,**/dist/**,**/build/**,**/*.stories.tsx,**/*.test.tsx` |
