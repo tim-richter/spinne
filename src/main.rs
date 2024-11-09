@@ -1,7 +1,7 @@
 use clap::Parser;
 use colored::*;
 use env_logger::Env;
-use log::info;
+use log::{error, info};
 use std::io::Write;
 use std::{fs::File, path::PathBuf};
 
@@ -116,7 +116,17 @@ fn main() -> std::io::Result<()> {
         let output_path_with_extension = current_dir.join(format!("{}.html", file_name));
         info!("Writing report to: {:?}", output_path_with_extension);
         let graph_data = serde_json::json!(component_graph.to_serializable());
-        HtmlGenerator::new(graph_data).save(&output_path_with_extension)?;
+
+        match HtmlGenerator::new(graph_data).save(&output_path_with_extension) {
+            Ok(_) => info!("Report written to: {:?}", output_path_with_extension),
+            Err(e) => error!("Failed to write report: {}", e),
+        }
+
+        #[cfg(not(test))]
+        match open::that_detached(output_path_with_extension) {
+            Ok(_) => info!("Opened report in browser"),
+            Err(e) => error!("Failed to open report in browser: {}", e),
+        }
     }
 
     Ok(())
