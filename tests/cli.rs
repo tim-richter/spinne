@@ -142,4 +142,35 @@ fn test_cli_with_include_option() {
         .success()
         .stdout(predicate::str::contains("Home"))
         .stdout(predicate::str::contains("Button").not());
-}   
+}
+
+#[test]
+fn test_cli_with_html_output() {
+    let temp_dir = create_mock_project(vec![(
+        "src/components/Button.tsx",
+        "export function Button() { return <button>Click me</button>; }",
+    ), (
+        "src/pages/Home.tsx",
+        "import { Header } from '../components/Header'; export function Home() { return <div><Header /><main>Welcome</main></div>; }",
+    ),
+    (
+        "src/index.tsx",
+        "import { Home } from './pages/Home'; export function App() { return <Home />; }",
+    ),
+    ("src/components/Header.tsx", "export function Header() { return <header>Header</header>; }"),
+    ]);
+    let mut cmd = Command::cargo_bin("spinne").unwrap();
+
+    cmd
+        .current_dir(temp_dir.path())
+        .arg("-e")
+        .arg(temp_dir.path())
+        .arg("-f")
+        .arg("html")
+        .assert()
+        .success()
+        .stderr(predicate::str::contains("Writing report to:"));
+
+    // Check if the output file is created
+    assert!(temp_dir.path().join("spinne-report.html").exists());
+}

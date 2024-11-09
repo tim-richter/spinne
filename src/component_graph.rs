@@ -16,7 +16,7 @@ pub struct ComponentGraph {
     pub graph: Graph<Component, ()>,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct SerializableComponentGraph {
     pub nodes: Vec<Component>,
     pub edges: Vec<(usize, usize)>,
@@ -275,4 +275,20 @@ fn test_cyclic_dependency() {
     assert_eq!(graph.graph.edge_count(), 2);
     assert!(graph.graph.contains_edge(component_a, component_b));
     assert!(graph.graph.contains_edge(component_b, component_a));
+}
+
+
+#[test]
+fn test_to_serializable() {
+    let mut graph = ComponentGraph::new();
+    graph.add_component("ComponentA".to_string(), PathBuf::from("/path/to/ComponentA.tsx"));
+    graph.add_component("ComponentB".to_string(), PathBuf::from("/path/to/ComponentB.tsx"));
+
+    graph.add_child(("ComponentA", &PathBuf::from("/path/to/ComponentA.tsx")), ("ComponentB", &PathBuf::from("/path/to/ComponentB.tsx")));
+
+    let serializable = graph.to_serializable();
+    let json = serde_json::to_string_pretty(&serializable).unwrap();
+    println!("{}", json);
+    assert_eq!(serializable.nodes.len(), 2);
+    assert_eq!(serializable.edges.len(), 1);
 }

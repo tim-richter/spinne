@@ -32,12 +32,18 @@ If you want to output it directly to the console you can use `-o console`:
 spinne -o console
 ```
 
+To output the results in a html format with a visualization of the component graph:
+
+```bash
+spinne -f html
+```
+
 ## Options
 
 | Option | Description | Options | Default |
 | --- | --- | --- | --- |
 | `-e, --entry <path>` | entry point directory | Path | current directory (./) |
-| `-f, --format <format>` | define the output format | `file`, `console` | file |
+| `-f, --format <format>` | define the output format | `file`, `console`, `html` | file |
 | `-i, --ignore <path>` | define ignored folders | comma separated glob patterns | `**/node_modules/**,**/dist/**,**/build/**` |
 | `--file-name <file-name>` | define the output file name | String | `spinne-report` |
 | `-l, --log-level <log-level>` | define the log level | `error`, `warn`, `info`, `debug`, `trace` | `info` |

@@ -5,7 +5,7 @@ use log::info;
 use std::io::Write;
 use std::{fs::File, path::PathBuf};
 
-use spinne::ProjectTraverser;
+use spinne::{HtmlGenerator, ProjectTraverser};
 
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
@@ -56,6 +56,7 @@ enum LogLevel {
 enum Format {
     File,
     Console,
+    Html,
 }
 
 fn main() -> std::io::Result<()> {
@@ -107,6 +108,15 @@ fn main() -> std::io::Result<()> {
     if args.format == Format::Console {
         info!("Printing report to console:");
         component_graph.print_graph();
+    }
+
+    // output to html file in current working directory
+    if args.format == Format::Html {
+        let current_dir = std::env::current_dir()?;
+        let output_path_with_extension = current_dir.join(format!("{}.html", file_name));
+        info!("Writing report to: {:?}", output_path_with_extension);
+        let graph_data = serde_json::json!(component_graph.to_serializable());
+        HtmlGenerator::new(graph_data).save(&output_path_with_extension)?;
     }
 
     Ok(())
