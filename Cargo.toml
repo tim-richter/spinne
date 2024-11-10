@@ -8,17 +8,17 @@ edition = "2021"
 repository = "https://github.com/tim-richter/spinne"
 
 [dependencies]
-swc_common = { version = "1", features = ['tty-emitter']}
-swc_ecma_ast = "1"
-swc_ecma_loader = { version = "1", features = ['node', 'tsc']}
-swc_ecma_visit = "1"
-swc_ecma_parser = { version = "1", features = ['typescript']}
-clap = { version = "4.5.16", features = ["derive"] }
+swc_common = { version = "4", features = ['tty-emitter']}
+swc_ecma_ast = "4"
+swc_ecma_loader = { version = "4", features = ['node', 'tsc']}
+swc_ecma_visit = "4"
+swc_ecma_parser = { version = "5", features = ['typescript']}
+clap = { version = "4.5.20", features = ["derive"] }
 petgraph = { version = "0.6"}
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 glob = "0.3"
-jsonc-parser = { version = "0.23", features = ["serde"] }
+jsonc-parser = { version = "0.26", features = ["serde"] }
 colored = "2.1"
 ignore = "0.4"
 open = "5"
@@ -26,6 +26,6 @@ indicatif = "0"
 once_cell = "1"
 
 [dev-dependencies]
-tempfile = "3.2"
+tempfile = "3.14"
 assert_cmd = "2.0"
-predicates = "3.0"
+predicates = "3.1"
