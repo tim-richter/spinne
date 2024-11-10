@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 use serde_json::Value;
 use std::fs;
-use log::{debug, warn};
+use crate::logging::Logger;
 
 /// Handles interactions with package.json
 #[derive(Debug, Clone)]
@@ -15,7 +15,7 @@ impl PackageJson {
         let package_json_path = PathBuf::from("package.json");
         
         if !package_json_path.exists() {
-            warn!("No package.json found in current directory");
+            Logger::debug("No package.json found in current directory", 1);
             return None;
         }
 
@@ -23,17 +23,17 @@ impl PackageJson {
             Ok(content) => {
                 match serde_json::from_str(&content) {
                     Ok(parsed) => {
-                        debug!("Successfully read package.json");
+                        Logger::debug("Successfully read package.json", 1);
                         Some(PackageJson { content: parsed })
                     }
                     Err(e) => {
-                        warn!("Failed to parse package.json: {}", e);
+                        Logger::debug(&format!("Failed to parse package.json: {}", e), 1);
                         None
                     }
                 }
             }
             Err(e) => {
-                warn!("Failed to read package.json: {}", e);
+                Logger::debug(&format!("Failed to read package.json: {}", e), 1);
                 None
             }
         }

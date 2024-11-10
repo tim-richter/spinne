@@ -1,5 +1,5 @@
+use crate::logging::Logger;
 use crate::{component_graph::ComponentGraph, config::Config, ProjectTraverser};
-use log::{error, info, warn};
 use swc_ecma_loader::TargetEnv;
 use std::path::PathBuf;
 use std::{collections::HashMap, fs, path::Path, sync::Arc};
@@ -52,6 +52,7 @@ impl<'a> FileVisitor<'a> {
 
     /// Resolve a component name to a file path.
     fn resolve_component_path(&mut self, component_name: &str) -> Option<PathBuf> {
+        Logger::debug(&format!("Starting to resolve component path for: {:?}", component_name), 2);
         let import_path = self.imports.get(component_name)?;
         let resolved_path = self.resolve_import(import_path);
 
@@ -64,17 +65,20 @@ impl<'a> FileVisitor<'a> {
 
         match self.resolver.resolve(&base, import_path) {
             Ok(resolved) => {
-                println!("Resolved path: {:?}", resolved.filename);
+                Logger::debug(&format!("Resolved path: {:?}", resolved.filename), 2);
+
                 if resolved.filename.to_string().contains("node_modules") {
                     return Some(PathBuf::from(resolved.filename.to_string()));
                 }
 
                 let path = PathBuf::from(resolved.filename.to_string());
-                info!("Resolved path: {:?}", path);
+
+                Logger::debug(&format!("Starting to traverse path: {:?}", path), 2);
                 self.traverse_import(&path)
             }
             Err(_) => {
                 // we assume the import is a node_module
+                Logger::debug(&format!("Resolved import to node_module: {:?}", import_path), 2);
                 Some(PathBuf::from(import_path))
             }
         }
@@ -82,12 +86,11 @@ impl<'a> FileVisitor<'a> {
 
     /// Traverse an import path and update the component graph
     fn traverse_import(&self, path: &PathBuf) -> Option<PathBuf> {
-        info!("Traversing path: {:?}", path);
         if path.is_file() {
             let content = fs::read_to_string(path);
 
             if let Err(e) = content {
-                error!("Error reading file: {:?}", e);
+                Logger::debug(&format!("Error reading file: {:?}", e), 2);
                 return None;
             }
 
@@ -96,29 +99,37 @@ impl<'a> FileVisitor<'a> {
 
             // abort traversing if the path is not a JS/TS file
             if extension != "ts" && extension != "tsx" && extension != "js" && extension != "jsx" {
-                info!("Not a JS/TS file");
+                Logger::debug("Not a JS/TS file", 2);
                 return None;
             }
 
             let module = ProjectTraverser::parse_typescript(&content);
 
             for item in &module.body {
+                Logger::debug(&format!("Visiting item: {:?}", item), 2);
+
                 if let ModuleItem::ModuleDecl(ModuleDecl::ExportDecl(export_decl)) = item {
+                    Logger::debug(&format!("Visiting export decl: {:?}", export_decl), 2);
                     if let Decl::Var(var_decl) = &export_decl.decl {
+                        Logger::debug(&format!("Visiting var decl: {:?}", var_decl), 2);
                         for decl in &var_decl.decls {
                             if let Pat::Ident(_ident) = &decl.name {
+                                Logger::debug("Found component", 2);
                                 return Some(path.clone());
                             }
                         }
                     } else if let Decl::Fn(_) = &export_decl.decl {
+                        Logger::debug("Found function", 2);
                         return Some(path.clone());
                     }
                 } else if let ModuleItem::ModuleDecl(ModuleDecl::ExportNamed(export_named)) = item {
+                    Logger::debug(&format!("Visiting export named: {:?}", export_named), 2);
                     if let Some(src) = &export_named.src {
                         let new_path_str = src.value.to_string();
                         let base = FileName::Real(path.clone());
                         if let Ok(resolved) = self.resolver.resolve(&base, &new_path_str) {
                             let new_path = PathBuf::from(resolved.filename.to_string());
+                            Logger::debug(&format!("Resolved import to: {:?}", new_path), 2);
                             return self.traverse_import(&new_path);
                         }
                     }
@@ -127,13 +138,14 @@ impl<'a> FileVisitor<'a> {
                     let base = FileName::Real(path.clone());
                     if let Ok(resolved) = self.resolver.resolve(&base, &new_path_str) {
                         let new_path = PathBuf::from(resolved.filename.to_string());
+                        Logger::debug(&format!("Resolved import to: {:?}", new_path), 2);
                         return self.traverse_import(&new_path);
                     }
                 }
             }
         }
 
-        warn!("File not found: {:?}", path);
+        Logger::debug(&format!("File not found: {:?}", path), 2);
         None
     }
 
@@ -151,6 +163,8 @@ impl<'a> Visit for FileVisitor<'a> {
 
     /// Visits function declarations and checks if they are React components.
     fn visit_fn_decl(&mut self, n: &swc_ecma_visit::swc_ecma_ast::FnDecl) {
+        Logger::debug(&format!("Visiting fn decl: {:?}", n), 2);
+
         if self.is_component(&n.ident) {
             let component_name = n.ident.sym.to_string();
 
@@ -166,6 +180,8 @@ impl<'a> Visit for FileVisitor<'a> {
 
     /// Visits variable declarations and checks if they are React components.
     fn visit_var_decl(&mut self, n: &VarDecl) {
+        Logger::debug(&format!("Visiting var decl: {:?}", n), 2);
+
         for decl in &n.decls {
             if let Some(init) = &decl.init {
                 if let Expr::Arrow(_arrow_expr) = &**init {
@@ -185,6 +201,8 @@ impl<'a> Visit for FileVisitor<'a> {
 
     /// Visits expressions and checks if they are React components.
     fn visit_expr(&mut self, n: &Expr) {
+        Logger::debug(&format!("Visiting expr: {:?}", n), 2);
+
         if let Expr::Assign(assign_expr) = n {
             if let AssignTarget::Simple(SimpleAssignTarget::Ident(ident)) = &assign_expr.left {
                 if self.is_component(&ident) {
@@ -200,6 +218,8 @@ impl<'a> Visit for FileVisitor<'a> {
 
     /// Visits JSX opening elements and adds them as children of the current component.
     fn visit_jsx_opening_element(&mut self, n: &JSXOpeningElement) {
+        Logger::debug(&format!("Visiting jsx opening element: {:?}", n), 2);
+
         if let Some(current_component) = self.current_component.clone() {
             if let JSXElementName::Ident(ident) = &n.name {
                 if self.is_component(ident) {
@@ -233,6 +253,8 @@ impl<'a> Visit for FileVisitor<'a> {
     }
 
     fn visit_import_decl(&mut self, n: &ImportDecl) {
+        Logger::debug(&format!("Visiting import decl: {:?}", n), 2);
+
         for specifier in &n.specifiers {
             if let ImportSpecifier::Named(named) = specifier {
                 self.imports

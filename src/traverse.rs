@@ -1,12 +1,12 @@
 use ignore::overrides::OverrideBuilder;
 use ignore::WalkBuilder;
-use log::{debug, error};
 use std::path::Path;
 use std::{fs, sync::Arc};
 use swc_ecma_parser::{lexer::Lexer, Parser, StringInput, Syntax, TsSyntax};
 
 use swc_ecma_visit::Visit;
 
+use crate::logging::Logger;
 use crate::{
     component_graph::ComponentGraph, config::Config, file_visitor::FileVisitor,
     ts_config_reader::TsConfigReader,
@@ -24,6 +24,8 @@ impl ProjectTraverser {
         let (base_url, paths) = TsConfigReader::read_tsconfig(&tsconfig_path);
 
         let config = Config::new(base_url, paths);
+
+        Logger::debug(&format!("Starting to traverse project with config: {:?}", config), 1);
 
         Self {
             component_graph: ComponentGraph::new(),
@@ -44,9 +46,10 @@ impl ProjectTraverser {
 
     /// Traverse the directory and analyze TypeScript files
     fn traverse_directory(&mut self, dir: &Path, exclude: &[String], include: &[String]) -> std::io::Result<()> {
-        debug!("Traversing directory: {:?}", dir);
+        Logger::debug(&format!("Starting to traverse directory: {:?}", dir), 1);
 
         if !dir.exists() {
+            Logger::error(&format!("Entry point does not exist: {:?}", dir));
             return Err(std::io::Error::new(
                 std::io::ErrorKind::NotFound,
                 format!("Entry point does not exist: {:?}", dir),
@@ -54,6 +57,7 @@ impl ProjectTraverser {
         }
 
         if dir.is_file() {
+            Logger::error(&format!("Entry point is a file: {:?}", dir));
             return Err(std::io::Error::new(
                 std::io::ErrorKind::Other,
                 format!("Entry point is a file: {:?}", dir),
@@ -75,6 +79,9 @@ impl ProjectTraverser {
         }
         let overrides = override_builder.build().unwrap();
 
+        Logger::debug(&format!("Using include patterns: {:?}", include), 1);
+        Logger::debug(&format!("Using exclude patterns: {:?}", exclude), 1);
+
         let walker = WalkBuilder::new(dir)
             .git_ignore(true)
             .overrides(overrides)
@@ -86,11 +93,11 @@ impl ProjectTraverser {
                     let path = entry.path();
 
                     if path.is_file() {
-                        debug!("Analyzing file: {:?}", path);
+                        Logger::debug(&format!("Analyzing file: {:?}", path), 1);
                         self.analyze_file(&path)?;
                     }
                 }
-                Err(e) => error!("Error while traversing: {:?}", e),
+                Err(e) => Logger::error(&format!("Error while traversing: {:?}", e)),
             }
         }
 

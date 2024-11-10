@@ -2,6 +2,8 @@ use petgraph::{graph::NodeIndex, Graph};
 use serde::{Deserialize, Serialize};
 use std::{collections::HashMap, path::PathBuf};
 
+use crate::logging::Logger;
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Component {
     pub name: String,
@@ -43,6 +45,7 @@ impl ComponentGraph {
 
     pub fn add_component(&mut self, key: String, file_path: PathBuf) -> NodeIndex {
         if !self.has_component(&key, &file_path) {
+            Logger::debug(&format!("Adding new component: {:?}", key), 2);
             let node_index = self.graph.add_node(Component {
                 name: key,
                 file_path,
@@ -50,6 +53,7 @@ impl ComponentGraph {
             });
             node_index
         } else {
+            Logger::debug(&format!("Called add_component for existing component: {:?}", key), 2);
             self.graph
                 .node_indices()
                 .find(|i| self.graph[*i].name == key && self.graph[*i].file_path == file_path)
@@ -60,6 +64,8 @@ impl ComponentGraph {
     pub fn add_child(&mut self, parent: (&str, &PathBuf), child: (&str, &PathBuf)) {
         let parent_index = self.get_or_add_component(parent.0, parent.1.clone());
         let child_index = self.get_or_add_component(child.0, child.1.clone());
+
+        Logger::debug(&format!("Adding child edge: {:?} -> {:?}", parent.0, child.0), 2);
         self.graph.add_edge(parent_index, child_index, ());
     }
 
@@ -73,6 +79,8 @@ impl ComponentGraph {
     pub fn add_prop_usage(&mut self, component: &str, file_path: &PathBuf, prop: String) {
         if let Some(node_index) = self.get_component(component, file_path) {
             let component = &mut self.graph[node_index];
+
+            Logger::debug(&format!("Adding prop usage: {:?} -> {:?}", component, prop), 2);
             *component.prop_usage.entry(prop).or_insert(0) += 1;
         }
     }

@@ -4,6 +4,8 @@ use serde_json::Value;
 
 const HTML_TEMPLATE: &str = include_str!("./templates/component-graph.html");
 
+/// Generates an HTML report from a component graph.
+/// Uses d3.js to render the graph.
 pub struct HtmlGenerator {
     template: String,
 }

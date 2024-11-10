@@ -5,6 +5,7 @@ mod traverse;
 mod ts_config_reader;
 mod package_json;
 mod html_generator;
+pub mod logging;
 
 pub use component_graph::ComponentGraph;
 pub use config::Config;

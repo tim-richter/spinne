@@ -37,7 +37,7 @@ fn test_cli_with_default_output() {
         .arg(temp_dir.path().join("src"))
         .assert()
         .success()
-        .stderr(predicate::str::contains("Writing report to:"));
+        .stdout(predicate::str::contains("Writing report to:"));
 
     // Check if the output file is created
     assert!(temp_dir.path().join("spinne-report.json").exists());
@@ -58,7 +58,7 @@ fn test_cli_with_console_output() {
         .arg("console")
         .assert()
         .success()
-        .stderr(predicate::str::contains("Printing report to console:"))
+        .stdout(predicate::str::contains("Printing report to console:"))
         .stdout(predicate::str::contains("Button"));
 
     // Check that no output file is created
@@ -169,7 +169,7 @@ fn test_cli_with_html_output() {
         .arg("html")
         .assert()
         .success()
-        .stderr(predicate::str::contains("Writing report to:"));
+        .stdout(predicate::str::contains("Writing report to:"));
 
     // Check if the output file is created
     assert!(temp_dir.path().join("spinne-report.html").exists());

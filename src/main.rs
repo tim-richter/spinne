@@ -1,8 +1,5 @@
 use clap::Parser;
-use colored::*;
-use env_logger::Env;
-use log::{error, info};
-use std::io::Write;
+use spinne::logging::Logger;
 use std::{fs::File, path::PathBuf};
 
 use spinne::{HtmlGenerator, ProjectTraverser};
@@ -38,18 +35,9 @@ struct Args {
     )]
     include: Vec<String>,
 
-    /// Sets the level of logging
-    #[arg(short, long, default_value = "info")]
-    log_level: LogLevel,
-}
-
-#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, clap::ValueEnum, Debug)]
-enum LogLevel {
-    Error,
-    Warn,
-    Info,
-    Debug,
-    Trace,
+    /// Verbosity level (-l = level 1, -ll = level 2, etc.)
+    #[arg(short = 'l', action = clap::ArgAction::Count)]
+    verbosity: u8,
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, clap::ValueEnum, Debug)]
@@ -62,31 +50,7 @@ enum Format {
 fn main() -> std::io::Result<()> {
     let args = Args::parse();
 
-    let log_level = match args.log_level {
-        LogLevel::Error => "error",
-        LogLevel::Warn => "warn",
-        LogLevel::Info => "info",
-        LogLevel::Debug => "debug",
-        LogLevel::Trace => "trace",
-    };
-
-    // Initialize the logger
-    env_logger::Builder::from_env(Env::default().default_filter_or(log_level))
-        .format(|buf, record| {
-            let level = record.level();
-
-            // Assign colors based on log level
-            let level_str = match level {
-                log::Level::Error => "ERROR".red().bold().to_string(),
-                log::Level::Warn => "WARN".yellow().bold().to_string(),
-                log::Level::Info => "INFO".green().bold().to_string(),
-                log::Level::Debug => "DEBUG".blue().bold().to_string(),
-                log::Level::Trace => "TRACE".purple().bold().to_string(),
-            };
-
-            writeln!(buf, "{}: {}", level_str, record.args())
-        })
-        .init();
+    Logger::set_level(args.verbosity);
 
     let absolute_entry = std::fs::canonicalize(&args.entry)?;
 
@@ -99,14 +63,16 @@ fn main() -> std::io::Result<()> {
     if args.format == Format::File {
         let current_dir = std::env::current_dir()?;
         let output_path_with_extension = current_dir.join(format!("{}.json", file_name));
-        info!("Writing report to: {:?}", output_path_with_extension);
+
+        Logger::info(&format!("Writing report to: {:?}", output_path_with_extension));
+
         let file = File::create(output_path_with_extension)?;
         serde_json::to_writer_pretty(file, &component_graph.to_serializable())?;
     }
 
     // output to console
     if args.format == Format::Console {
-        info!("Printing report to console:");
+        Logger::info("Printing report to console:");
         component_graph.print_graph();
     }
 
@@ -114,18 +80,20 @@ fn main() -> std::io::Result<()> {
     if args.format == Format::Html {
         let current_dir = std::env::current_dir()?;
         let output_path_with_extension = current_dir.join(format!("{}.html", file_name));
-        info!("Writing report to: {:?}", output_path_with_extension);
+
+        Logger::info(&format!("Writing report to: {:?}", output_path_with_extension));
+
         let graph_data = serde_json::json!(component_graph.to_serializable());
 
         match HtmlGenerator::new(graph_data).save(&output_path_with_extension) {
-            Ok(_) => info!("Report written to: {:?}", output_path_with_extension),
-            Err(e) => error!("Failed to write report: {}", e),
+            Ok(_) => Logger::info(&format!("Report written to: {:?}", output_path_with_extension)),
+            Err(e) => Logger::error(&format!("Failed to write report: {}", e)),
         }
 
         #[cfg(not(test))]
         match open::that_detached(output_path_with_extension) {
-            Ok(_) => info!("Opened report in browser"),
-            Err(e) => error!("Failed to open report in browser: {}", e),
+            Ok(_) => Logger::info("Opened report in browser"),
+            Err(e) => Logger::error(&format!("Failed to open report in browser: {}", e)),
         }
     }
 

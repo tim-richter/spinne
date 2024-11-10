@@ -1,6 +1,7 @@
-use log::{error, warn};
 use std::fs;
 use std::path::PathBuf;
+
+use crate::logging::Logger;
 
 /// Handles interactions with tsconfig.json
 pub struct TsConfigReader;
@@ -8,45 +9,66 @@ pub struct TsConfigReader;
 impl TsConfigReader {
     /// Read the tsconfig.json file and return the baseUrl and paths.
     pub fn read_tsconfig(tsconfig_path: &PathBuf) -> (PathBuf, Vec<(String, Vec<String>)>) {
-        if let Ok(content) = fs::read_to_string(tsconfig_path) {
-            if let Some(json) =
-                jsonc_parser::parse_to_serde_value(&content, &Default::default()).unwrap()
-            {
-                // TODO: Use a better parser with support for extends
-                let base_url = if let Some(base_url) = json["compilerOptions"]["baseUrl"].as_str() {
-                    PathBuf::from(base_url).canonicalize().unwrap()
-                } else {
-                    warn!("No baseUrl found in tsconfig.json");
-                    PathBuf::from("")
-                };
+        Logger::debug(&format!("Reading tsconfig.json from: {:?}", tsconfig_path), 1);
 
-                let paths = json["compilerOptions"]["paths"]
-                    .as_object()
-                    .map(|paths| {
-                        paths
-                            .iter()
-                            .map(|(key, value)| {
-                                (
-                                    key.clone(),
-                                    value
-                                        .as_array()
-                                        .unwrap_or(&Vec::new())
-                                        .iter()
-                                        .filter_map(|v| v.as_str().map(|s| s.to_string()))
-                                        .collect(),
-                                )
-                            })
-                            .collect()
-                    })
-                    .unwrap_or_default();
+        match fs::read_to_string(tsconfig_path) {
+            Ok(content) => {
+                match jsonc_parser::parse_to_serde_value(&content, &Default::default()) {
+                    Ok(json) => {
+                        match json {
+                            Some(json) => {
+                                // TODO: Use a better parser with support for extends
+                                let base_url = if let Some(base_url) = json["compilerOptions"]["baseUrl"].as_str() {
+                                    match PathBuf::from(base_url).canonicalize() {
+                                        Ok(path) => path,
+                                        Err(e) => {
+                                            Logger::debug(&format!("Failed to canonicalize baseUrl: {}", e), 1);
+                                            PathBuf::from("")
+                                        }
+                                    }
+                                } else {
+                                    Logger::debug("No baseUrl found in tsconfig.json", 1);
+                                    PathBuf::from("")
+                                };
 
-                return (PathBuf::from(base_url), paths);
-            } else {
-                error!("Failed to parse tsconfig.json");
+                                let paths = if let Some(paths) = json["compilerOptions"]["paths"].as_object() {
+                                    paths
+                                            .iter()
+                                            .map(|(key, value)| {
+                                                (
+                                                    key.clone(),
+                                                    value
+                                                        .as_array()
+                                                        .unwrap_or(&Vec::new())
+                                                        .iter()
+                                                        .filter_map(|v| v.as_str().map(|s| s.to_string()))
+                                                        .collect(),
+                                                )
+                                            })
+                                            .collect()
+                                } else {
+                                    Logger::debug("No paths found in tsconfig.json", 1);
+                                    Vec::new()
+                                };
+
+                                return (PathBuf::from(base_url), paths);
+                            }
+                            None => {
+                                Logger::debug("Failed to parse tsconfig.json, no content", 1);
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        Logger::debug(&format!("Failed to parse tsconfig.json: {}", e), 1);
+                    }
+                }
             }
-        } else {
-            warn!("Failed to read tsconfig.json");
+            Err(e) => {
+                Logger::debug(&format!("Failed to read tsconfig.json: {}", e), 1);
+            }
         }
+
+        Logger::debug("Falling back to default values for tsconfig.json", 1);
         (PathBuf::from(""), Vec::new())
     }
 }
