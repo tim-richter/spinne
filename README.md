@@ -49,6 +49,6 @@ spinne -f html
 | `-f, --format <format>` | define the output format | `file`, `console`, `html` | file |
 | `-i, --ignore <path>` | define ignored folders | comma separated glob patterns | `**/node_modules/**,**/dist/**,**/build/**` |
 | `--file-name <file-name>` | define the output file name | String | `spinne-report` |
-| `-l, --log-level <log-level>` | define the log level | `error`, `warn`, `info`, `debug`, `trace` | `info` |
+| `-l, --log-level <log-level>` | define the log level | the amount of -l used will define the log level | 0 |
 | `--include <include>` | define a glob pattern to include | comma separated glob patterns | `**/*.tsx` |
 | `--exclude <exclude>` | define a glob pattern to exclude | comma separated glob patterns | `**/node_modules/**,**/dist/**,**/build/**,**/*.stories.tsx,**/*.test.tsx` |
