@@ -3,11 +3,14 @@
 </p>
 
 <h1 align="center">
-Spinne
+  Spinne
 </h1>
 <p align="center">
 Spins a web of components and analyzes component/prop usage in your react project
-<p>
+</p>
+<p align="center">
+  <img alt="Crates.io Version" src="https://img.shields.io/crates/v/spinne?style=for-the-badge&label=%20">
+</p>
 
 ## Installation
 
