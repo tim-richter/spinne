@@ -45,7 +45,7 @@ impl ComponentGraph {
 
     pub fn add_component(&mut self, key: String, file_path: PathBuf) -> NodeIndex {
         if !self.has_component(&key, &file_path) {
-            Logger::debug(&format!("Adding new component: {:?}", key), 2);
+            Logger::debug(&format!("Adding new component: {:?}, {:?}", key, file_path), 2);
             let node_index = self.graph.add_node(Component {
                 name: key,
                 file_path,

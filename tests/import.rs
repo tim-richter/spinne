@@ -1,4 +1,4 @@
-use spinne::ProjectTraverser;
+use spinne::{logging::Logger, ProjectTraverser};
 use tempfile::TempDir;
 use std::fs;
 
@@ -7,6 +7,7 @@ fn create_mock_project(files: Vec<(&str, &str)>) -> TempDir {
     let root = temp_dir.path();
     // Create a nested directory structure
     fs::create_dir_all(root.join("src/components")).unwrap();
+    fs::create_dir_all(root.join("src/components/Button")).unwrap();
     fs::create_dir_all(root.join("src/pages")).unwrap();
 
     // Create mock .tsx files
@@ -139,4 +140,47 @@ fn should_resolve_imports_with_relative_and_tsconfig_paths_correctly() {
         .contains_edge(my_component2_index, button_index));
     assert!(component_graph.graph.edges(my_component2_index).count() == 1);
     assert!(component_graph.graph.edges(button_index).count() == 0);
+}
+
+#[test]
+fn should_resolve_imports_with_two_different_tsconfig_paths_to_the_same_file() {
+    Logger::set_level(2);
+    
+    let temp_dir = create_mock_project(vec![
+        ("src/components/index.ts", "export { Button, Button2 } from './Button';"),
+        ("src/components/Button/index.ts", "export { Button } from './Button'; export { Button2 } from './Button2';"),
+        ("src/components/Button/Button2.tsx", "export function Button2() { return <button>Click me</button>; }"),
+        ("src/components/Button/Button.tsx", "export function Button() { return <button>Click me</button>; }"),
+
+        ("src/MyComponent.tsx", "import { Button } from '@components/Button'; function MyComponent() { return <Button />; }"),
+        ("src/MyComponent2.tsx", "import { Button2 } from '@components'; function MyComponent2() { return <Button2 />; }"),
+        ("src/MyComponent3.tsx", "import { Button } from '@components/Button/Button'; function MyComponent3() { return <Button />; }"),
+    ]);
+
+    let tsconfig_path = temp_dir.path().join("tsconfig.json");
+    let tsconfig_content = format!(r#"
+    {{
+        "compilerOptions": {{
+            "baseUrl": "{}",
+            "paths": {{
+                "@components": ["src/components"],
+                "@components/*": ["src/components/*"]
+            }}
+        }}
+    }}
+"#, temp_dir.path().to_string_lossy());
+    fs::write(tsconfig_path, tsconfig_content).unwrap();
+
+    let mut traverser = ProjectTraverser::new(&temp_dir.path());
+    let component_graph = traverser
+        .traverse(&temp_dir.path().join("src"), &vec![], &vec!["**/*.tsx".to_string()])
+        .unwrap();
+
+    assert!(component_graph.has_component("MyComponent", &temp_dir.path().join("src/MyComponent.tsx")));
+    assert!(component_graph.has_component("MyComponent2", &temp_dir.path().join("src/MyComponent2.tsx")));
+    assert!(component_graph.has_component("MyComponent3", &temp_dir.path().join("src/MyComponent3.tsx")));
+    assert!(component_graph.has_component("Button", &temp_dir.path().join("src/components/Button/Button.tsx")));
+    assert!(component_graph.has_component("Button2", &temp_dir.path().join("src/components/Button/Button2.tsx")));
+    println!("{:?}", component_graph.graph);
+    assert!(component_graph.graph.node_count() == 5);
 }
