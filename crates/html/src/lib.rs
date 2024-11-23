@@ -2,7 +2,7 @@ use serde_json::Value;
 use std::fs;
 use std::path::Path;
 
-const HTML_TEMPLATE: &str = include_str!("./templates/component-graph.html");
+const HTML_TEMPLATE: &str = include_str!("./component-graph.html");
 
 /// Generates an HTML report from a component graph.
 /// Uses d3.js to render the graph.

@@ -6,7 +6,7 @@ use swc_ecma_parser::{lexer::Lexer, Parser, StringInput, Syntax, TsSyntax};
 
 use swc_ecma_visit::Visit;
 
-use crate::logging::Logger;
+use spinne_logger::Logger;
 use crate::{
     component_graph::ComponentGraph, config::Config, file_visitor::FileVisitor,
     ts_config_reader::TsConfigReader,

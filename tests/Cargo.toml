@@ -1,0 +1,13 @@
+[package]
+name = "spinne-tests"
+version = "0.0.0"
+publish = false
+edition = "2021"
+
+[dependencies]
+spinne-core = { path = "../crates/core" }
+spinne-html = { path = "../crates/html" }
+spinne-logger = { path = "../crates/logger" }
+tempfile = { workspace = true }
+assert_cmd = { workspace = true }
+predicates = { workspace = true }

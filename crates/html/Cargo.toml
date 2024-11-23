@@ -1,0 +1,7 @@
+[package]
+name = "spinne-html"
+version = "0.2.0"
+edition = "2021"
+
+[dependencies]
+serde_json = { workspace = true }
