@@ -25,7 +25,10 @@ impl ProjectTraverser {
 
         let config = Config::new(base_url, paths);
 
-        Logger::debug(&format!("Starting to traverse project with config: {:?}", config), 1);
+        Logger::debug(
+            &format!("Starting to traverse project with config: {:?}", config),
+            1,
+        );
 
         Self {
             component_graph: ComponentGraph::new(),
@@ -45,7 +48,12 @@ impl ProjectTraverser {
     }
 
     /// Traverse the directory and analyze TypeScript files
-    fn traverse_directory(&mut self, dir: &Path, exclude: &[String], include: &[String]) -> std::io::Result<()> {
+    fn traverse_directory(
+        &mut self,
+        dir: &Path,
+        exclude: &[String],
+        include: &[String],
+    ) -> std::io::Result<()> {
         Logger::debug(&format!("Starting to traverse directory: {:?}", dir), 1);
 
         if !dir.exists() {
@@ -233,7 +241,11 @@ mod tests {
     fn test_ignore_directory() {
         let temp_dir = create_mock_project();
         let mut traverser = ProjectTraverser::new(temp_dir.path());
-        let result = traverser.traverse(temp_dir.path(), &vec!["**/src/**".to_string()], &vec!["**/*.tsx".to_string()]);
+        let result = traverser.traverse(
+            temp_dir.path(),
+            &vec!["**/src/**".to_string()],
+            &vec!["**/*.tsx".to_string()],
+        );
 
         assert!(result.is_ok());
         let graph = result.unwrap();
@@ -244,7 +256,11 @@ mod tests {
     fn test_ignore_file() {
         let temp_dir = create_mock_project();
         let mut traverser = ProjectTraverser::new(temp_dir.path());
-        let result = traverser.traverse(temp_dir.path(), &vec!["**/Box.tsx".to_string()], &vec!["**/*.tsx".to_string()]);
+        let result = traverser.traverse(
+            temp_dir.path(),
+            &vec!["**/Box.tsx".to_string()],
+            &vec!["**/*.tsx".to_string()],
+        );
 
         assert!(result.is_ok());
         let graph = result.unwrap();
@@ -255,7 +271,11 @@ mod tests {
     fn test_should_not_traverse_file() {
         let temp_dir = create_mock_project();
         let mut traverser = ProjectTraverser::new(temp_dir.path());
-        let result = traverser.traverse(temp_dir.path().join("src/index.tsx").as_path(), &vec![], &vec!["**/*.tsx".to_string()]);
+        let result = traverser.traverse(
+            temp_dir.path().join("src/index.tsx").as_path(),
+            &vec![],
+            &vec!["**/*.tsx".to_string()],
+        );
 
         assert!(result.is_err());
         assert_eq!(

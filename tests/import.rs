@@ -1,6 +1,6 @@
 use spinne::{logging::Logger, ProjectTraverser};
-use tempfile::TempDir;
 use std::fs;
+use tempfile::TempDir;
 
 fn create_mock_project(files: Vec<(&str, &str)>) -> TempDir {
     let temp_dir = TempDir::new().unwrap();
@@ -34,7 +34,11 @@ fn should_resolve_imports_correctly_with_multiple_files() {
 
     let mut traverser = ProjectTraverser::new(&temp_dir.path());
     let component_graph = traverser
-        .traverse(&temp_dir.path().join("src"), &vec![], &vec!["**/*.tsx".to_string()])
+        .traverse(
+            &temp_dir.path().join("src"),
+            &vec![],
+            &vec!["**/*.tsx".to_string()],
+        )
         .unwrap();
 
     assert!(
@@ -84,7 +88,8 @@ fn should_resolve_imports_with_relative_and_tsconfig_paths_correctly() {
     ]);
 
     let tsconfig_path = temp_dir.path().join("tsconfig.json");
-    let tsconfig_content = format!(r#"
+    let tsconfig_content = format!(
+        r#"
     {{
         "compilerOptions": {{
             "baseUrl": "{}",
@@ -93,12 +98,18 @@ fn should_resolve_imports_with_relative_and_tsconfig_paths_correctly() {
             }}
         }}
     }}
-"#, temp_dir.path().to_string_lossy());
+"#,
+        temp_dir.path().to_string_lossy()
+    );
     fs::write(tsconfig_path, tsconfig_content).unwrap();
 
     let mut traverser = ProjectTraverser::new(&temp_dir.path());
     let component_graph = traverser
-        .traverse(&temp_dir.path().join("src"), &vec![], &vec!["**/*.tsx".to_string()])
+        .traverse(
+            &temp_dir.path().join("src"),
+            &vec![],
+            &vec!["**/*.tsx".to_string()],
+        )
         .unwrap();
 
     assert!(
@@ -108,9 +119,10 @@ fn should_resolve_imports_with_relative_and_tsconfig_paths_correctly() {
         "MyComponent2",
         &temp_dir.path().join("src/MyComponent2.tsx")
     ));
-    assert!(
-        component_graph.has_component("MyComponent3", &temp_dir.path().join("src/MyComponent3.tsx"))
-    );
+    assert!(component_graph.has_component(
+        "MyComponent3",
+        &temp_dir.path().join("src/MyComponent3.tsx")
+    ));
 
     assert!(
         component_graph.has_component("Button", &temp_dir.path().join("src/components/Button.tsx"))
@@ -145,7 +157,7 @@ fn should_resolve_imports_with_relative_and_tsconfig_paths_correctly() {
 #[test]
 fn should_resolve_imports_with_two_different_tsconfig_paths_to_the_same_file() {
     Logger::set_level(2);
-    
+
     let temp_dir = create_mock_project(vec![
         ("src/components/index.ts", "export { Button, Button2 } from './Button';"),
         ("src/components/Button/index.ts", "export { Button } from './Button'; export { Button2 } from './Button2';"),
@@ -158,7 +170,8 @@ fn should_resolve_imports_with_two_different_tsconfig_paths_to_the_same_file() {
     ]);
 
     let tsconfig_path = temp_dir.path().join("tsconfig.json");
-    let tsconfig_content = format!(r#"
+    let tsconfig_content = format!(
+        r#"
     {{
         "compilerOptions": {{
             "baseUrl": "{}",
@@ -168,19 +181,39 @@ fn should_resolve_imports_with_two_different_tsconfig_paths_to_the_same_file() {
             }}
         }}
     }}
-"#, temp_dir.path().to_string_lossy());
+"#,
+        temp_dir.path().to_string_lossy()
+    );
     fs::write(tsconfig_path, tsconfig_content).unwrap();
 
     let mut traverser = ProjectTraverser::new(&temp_dir.path());
     let component_graph = traverser
-        .traverse(&temp_dir.path().join("src"), &vec![], &vec!["**/*.tsx".to_string()])
+        .traverse(
+            &temp_dir.path().join("src"),
+            &vec![],
+            &vec!["**/*.tsx".to_string()],
+        )
         .unwrap();
 
-    assert!(component_graph.has_component("MyComponent", &temp_dir.path().join("src/MyComponent.tsx")));
-    assert!(component_graph.has_component("MyComponent2", &temp_dir.path().join("src/MyComponent2.tsx")));
-    assert!(component_graph.has_component("MyComponent3", &temp_dir.path().join("src/MyComponent3.tsx")));
-    assert!(component_graph.has_component("Button", &temp_dir.path().join("src/components/Button/Button.tsx")));
-    assert!(component_graph.has_component("Button2", &temp_dir.path().join("src/components/Button/Button2.tsx")));
+    assert!(
+        component_graph.has_component("MyComponent", &temp_dir.path().join("src/MyComponent.tsx"))
+    );
+    assert!(component_graph.has_component(
+        "MyComponent2",
+        &temp_dir.path().join("src/MyComponent2.tsx")
+    ));
+    assert!(component_graph.has_component(
+        "MyComponent3",
+        &temp_dir.path().join("src/MyComponent3.tsx")
+    ));
+    assert!(component_graph.has_component(
+        "Button",
+        &temp_dir.path().join("src/components/Button/Button.tsx")
+    ));
+    assert!(component_graph.has_component(
+        "Button2",
+        &temp_dir.path().join("src/components/Button/Button2.tsx")
+    ));
     println!("{:?}", component_graph.graph);
     assert!(component_graph.graph.node_count() == 5);
 }

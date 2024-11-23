@@ -1,18 +1,19 @@
-use std::sync::atomic::{AtomicUsize, Ordering};
-use std::time::Duration;
 use colored::*;
 use indicatif::{ProgressBar, ProgressStyle};
-use std::sync::Mutex;
-use std::sync::Arc;
 use once_cell::sync::Lazy;
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::Arc;
+use std::sync::Mutex;
+use std::time::Duration;
 
 static LOG_LEVEL: AtomicUsize = AtomicUsize::new(0);
-static PROGRESS_BAR: Lazy<Arc<Mutex<Option<ProgressBar>>>> = Lazy::new(|| Arc::new(Mutex::new(None)));
+static PROGRESS_BAR: Lazy<Arc<Mutex<Option<ProgressBar>>>> =
+    Lazy::new(|| Arc::new(Mutex::new(None)));
 
 /// Logger is a static class that provides logging functionality.
-/// 
+///
 /// # Examples
-/// 
+///
 /// ```
 /// use spinne::logging::Logger;
 /// Logger::info("Hello, world!");
@@ -79,7 +80,7 @@ impl Logger {
             ProgressStyle::default_spinner()
                 .tick_chars("⠁⠂⠄⡀⢀⠠⠐⠈")
                 .template("{spinner:.blue} {msg}")
-                .unwrap()
+                .unwrap(),
         );
         pb.set_message(msg.to_string());
         pb.enable_steady_tick(Duration::from_millis(80));
@@ -101,10 +102,10 @@ mod tests {
     #[test]
     fn test_debug_levels() {
         Logger::set_level(2);
-        
+
         // Should not print
         Logger::debug("Level 3 message", 3);
-        
+
         // Should print
         Logger::debug("Level 2 message", 2);
         Logger::debug("Level 1 message", 1);

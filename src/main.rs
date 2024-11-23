@@ -28,11 +28,7 @@ struct Args {
     exclude: Vec<String>,
 
     /// Include directories/files with glob patterns (comma separated)
-    #[arg(
-        long,
-        value_delimiter = ',',
-        default_value = "**/*.tsx"
-    )]
+    #[arg(long, value_delimiter = ',', default_value = "**/*.tsx")]
     include: Vec<String>,
 
     /// Verbosity level (-l = level 1, -ll = level 2, etc.)
@@ -64,7 +60,10 @@ fn main() -> std::io::Result<()> {
         let current_dir = std::env::current_dir()?;
         let output_path_with_extension = current_dir.join(format!("{}.json", file_name));
 
-        Logger::info(&format!("Writing report to: {:?}", output_path_with_extension));
+        Logger::info(&format!(
+            "Writing report to: {:?}",
+            output_path_with_extension
+        ));
 
         let file = File::create(output_path_with_extension)?;
         serde_json::to_writer_pretty(file, &component_graph.to_serializable())?;
@@ -81,12 +80,18 @@ fn main() -> std::io::Result<()> {
         let current_dir = std::env::current_dir()?;
         let output_path_with_extension = current_dir.join(format!("{}.html", file_name));
 
-        Logger::info(&format!("Writing report to: {:?}", output_path_with_extension));
+        Logger::info(&format!(
+            "Writing report to: {:?}",
+            output_path_with_extension
+        ));
 
         let graph_data = serde_json::json!(component_graph.to_serializable());
 
         match HtmlGenerator::new(graph_data).save(&output_path_with_extension) {
-            Ok(_) => Logger::info(&format!("Report written to: {:?}", output_path_with_extension)),
+            Ok(_) => Logger::info(&format!(
+                "Report written to: {:?}",
+                output_path_with_extension
+            )),
             Err(e) => Logger::error(&format!("Failed to write report: {}", e)),
         }
 

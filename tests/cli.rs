@@ -161,8 +161,7 @@ fn test_cli_with_html_output() {
     ]);
     let mut cmd = Command::cargo_bin("spinne").unwrap();
 
-    cmd
-        .current_dir(temp_dir.path())
+    cmd.current_dir(temp_dir.path())
         .arg("-e")
         .arg(temp_dir.path())
         .arg("-f")

@@ -45,7 +45,10 @@ impl ComponentGraph {
 
     pub fn add_component(&mut self, key: String, file_path: PathBuf) -> NodeIndex {
         if !self.has_component(&key, &file_path) {
-            Logger::debug(&format!("Adding new component: {:?}, {:?}", key, file_path), 2);
+            Logger::debug(
+                &format!("Adding new component: {:?}, {:?}", key, file_path),
+                2,
+            );
             let node_index = self.graph.add_node(Component {
                 name: key,
                 file_path,
@@ -53,7 +56,10 @@ impl ComponentGraph {
             });
             node_index
         } else {
-            Logger::debug(&format!("Called add_component for existing component: {:?}", key), 2);
+            Logger::debug(
+                &format!("Called add_component for existing component: {:?}", key),
+                2,
+            );
             self.graph
                 .node_indices()
                 .find(|i| self.graph[*i].name == key && self.graph[*i].file_path == file_path)
@@ -65,7 +71,10 @@ impl ComponentGraph {
         let parent_index = self.get_or_add_component(parent.0, parent.1.clone());
         let child_index = self.get_or_add_component(child.0, child.1.clone());
 
-        Logger::debug(&format!("Adding child edge: {:?} -> {:?}", parent.0, child.0), 2);
+        Logger::debug(
+            &format!("Adding child edge: {:?} -> {:?}", parent.0, child.0),
+            2,
+        );
         self.graph.add_edge(parent_index, child_index, ());
     }
 
@@ -80,7 +89,10 @@ impl ComponentGraph {
         if let Some(node_index) = self.get_component(component, file_path) {
             let component = &mut self.graph[node_index];
 
-            Logger::debug(&format!("Adding prop usage: {:?} -> {:?}", component, prop), 2);
+            Logger::debug(
+                &format!("Adding prop usage: {:?} -> {:?}", component, prop),
+                2,
+            );
             *component.prop_usage.entry(prop).or_insert(0) += 1;
         }
     }
@@ -285,14 +297,22 @@ fn test_cyclic_dependency() {
     assert!(graph.graph.contains_edge(component_b, component_a));
 }
 
-
 #[test]
 fn test_to_serializable() {
     let mut graph = ComponentGraph::new();
-    graph.add_component("ComponentA".to_string(), PathBuf::from("/path/to/ComponentA.tsx"));
-    graph.add_component("ComponentB".to_string(), PathBuf::from("/path/to/ComponentB.tsx"));
+    graph.add_component(
+        "ComponentA".to_string(),
+        PathBuf::from("/path/to/ComponentA.tsx"),
+    );
+    graph.add_component(
+        "ComponentB".to_string(),
+        PathBuf::from("/path/to/ComponentB.tsx"),
+    );
 
-    graph.add_child(("ComponentA", &PathBuf::from("/path/to/ComponentA.tsx")), ("ComponentB", &PathBuf::from("/path/to/ComponentB.tsx")));
+    graph.add_child(
+        ("ComponentA", &PathBuf::from("/path/to/ComponentA.tsx")),
+        ("ComponentB", &PathBuf::from("/path/to/ComponentB.tsx")),
+    );
 
     let serializable = graph.to_serializable();
     let json = serde_json::to_string_pretty(&serializable).unwrap();

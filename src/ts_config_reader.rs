@@ -9,7 +9,10 @@ pub struct TsConfigReader;
 impl TsConfigReader {
     /// Read the tsconfig.json file and return the baseUrl and paths.
     pub fn read_tsconfig(tsconfig_path: &PathBuf) -> (PathBuf, Vec<(String, Vec<String>)>) {
-        Logger::debug(&format!("Reading tsconfig.json from: {:?}", tsconfig_path), 1);
+        Logger::debug(
+            &format!("Reading tsconfig.json from: {:?}", tsconfig_path),
+            1,
+        );
 
         match fs::read_to_string(tsconfig_path) {
             Ok(content) => {
@@ -18,11 +21,16 @@ impl TsConfigReader {
                         match json {
                             Some(json) => {
                                 // TODO: Use a better parser with support for extends
-                                let base_url = if let Some(base_url) = json["compilerOptions"]["baseUrl"].as_str() {
+                                let base_url = if let Some(base_url) =
+                                    json["compilerOptions"]["baseUrl"].as_str()
+                                {
                                     match PathBuf::from(base_url).canonicalize() {
                                         Ok(path) => path,
                                         Err(e) => {
-                                            Logger::debug(&format!("Failed to canonicalize baseUrl: {}", e), 1);
+                                            Logger::debug(
+                                                &format!("Failed to canonicalize baseUrl: {}", e),
+                                                1,
+                                            );
                                             PathBuf::from("")
                                         }
                                     }
@@ -31,21 +39,25 @@ impl TsConfigReader {
                                     PathBuf::from("")
                                 };
 
-                                let paths = if let Some(paths) = json["compilerOptions"]["paths"].as_object() {
+                                let paths = if let Some(paths) =
+                                    json["compilerOptions"]["paths"].as_object()
+                                {
                                     paths
-                                            .iter()
-                                            .map(|(key, value)| {
-                                                (
-                                                    key.clone(),
-                                                    value
-                                                        .as_array()
-                                                        .unwrap_or(&Vec::new())
-                                                        .iter()
-                                                        .filter_map(|v| v.as_str().map(|s| s.to_string()))
-                                                        .collect(),
-                                                )
-                                            })
-                                            .collect()
+                                        .iter()
+                                        .map(|(key, value)| {
+                                            (
+                                                key.clone(),
+                                                value
+                                                    .as_array()
+                                                    .unwrap_or(&Vec::new())
+                                                    .iter()
+                                                    .filter_map(|v| {
+                                                        v.as_str().map(|s| s.to_string())
+                                                    })
+                                                    .collect(),
+                                            )
+                                        })
+                                        .collect()
                                 } else {
                                     Logger::debug("No paths found in tsconfig.json", 1);
                                     Vec::new()
@@ -87,7 +99,8 @@ mod tests {
         let root = temp_dir.path();
 
         let tsconfig_path = root.join("tsconfig.json");
-        let tsconfig_content = format!(r#"
+        let tsconfig_content = format!(
+            r#"
             {{
                 "compilerOptions": {{
                     "baseUrl": "{}",
@@ -96,14 +109,19 @@ mod tests {
                     }}
                 }}
             }}
-        "#, root.to_string_lossy());
+        "#,
+            root.to_string_lossy()
+        );
         fs::write(&tsconfig_path, tsconfig_content).unwrap();
         let (base_url, paths) = TsConfigReader::read_tsconfig(&tsconfig_path);
 
         assert_eq!(base_url, PathBuf::from(root));
         assert_eq!(
             paths,
-            vec![("@components/*".to_string(), vec!["src/components/*".to_string()])]
+            vec![(
+                "@components/*".to_string(),
+                vec!["src/components/*".to_string()]
+            )]
         );
     }
 
@@ -150,13 +168,16 @@ mod tests {
         let root = temp_dir.path();
 
         let tsconfig_path = root.join("tsconfig.json");
-        let tsconfig_content = format!(r#"
+        let tsconfig_content = format!(
+            r#"
             {{
                 "compilerOptions": {{
                     "baseUrl": "{}"
                 }}
             }}
-        "#, root.to_string_lossy());
+        "#,
+            root.to_string_lossy()
+        );
         fs::write(&tsconfig_path, tsconfig_content).unwrap();
 
         let (base_url, paths) = TsConfigReader::read_tsconfig(&tsconfig_path);
@@ -171,7 +192,8 @@ mod tests {
         let root = temp_dir.path();
 
         let tsconfig_path = root.join("tsconfig.json");
-        let tsconfig_content = format!(r#"
+        let tsconfig_content = format!(
+            r#"
             {{
                 "compilerOptions": {{
                     /* comment */
@@ -182,7 +204,9 @@ mod tests {
                     }}
                 }}
             }}
-        "#, root.to_string_lossy());
+        "#,
+            root.to_string_lossy()
+        );
         println!("tsconfig_content: {}", tsconfig_content);
         fs::write(&tsconfig_path, tsconfig_content).unwrap();
 

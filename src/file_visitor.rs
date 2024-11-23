@@ -1,10 +1,10 @@
 use crate::logging::Logger;
 use crate::{component_graph::ComponentGraph, config::Config, ProjectTraverser};
-use swc_ecma_loader::TargetEnv;
 use std::path::PathBuf;
 use std::{collections::HashMap, fs, path::Path, sync::Arc};
 use swc_common::{collections::AHashMap, FileName};
 use swc_ecma_ast::*;
+use swc_ecma_loader::TargetEnv;
 use swc_ecma_loader::{
     resolve::Resolve, resolvers::node::NodeModulesResolver, resolvers::tsc::TsConfigResolver,
 };
@@ -52,15 +52,21 @@ impl<'a> FileVisitor<'a> {
 
     /// Resolve a component name to a file path.
     fn resolve_component_path(&mut self, component_name: &str) -> Option<PathBuf> {
-        Logger::debug(&format!("Starting to resolve component path for: {:?}", component_name), 2);
+        Logger::debug(
+            &format!(
+                "Starting to resolve component path for: {:?}",
+                component_name
+            ),
+            2,
+        );
         let import_path = self.imports.get(component_name)?;
-        let resolved_path = self.resolve_import(import_path);
+        let resolved_path = self.resolve_import(import_path, component_name);
 
         resolved_path
     }
 
     /// Resolves an import path to a file path.
-    fn resolve_import(&self, import_path: &str) -> Option<PathBuf> {
+    fn resolve_import(&self, import_path: &str, component_name: &str) -> Option<PathBuf> {
         let base = FileName::Real(self.file_path.clone());
 
         match self.resolver.resolve(&base, import_path) {
@@ -72,12 +78,10 @@ impl<'a> FileVisitor<'a> {
                 }
 
                 let path = PathBuf::from(resolved.filename.to_string());
-
                 Logger::debug(&format!("Starting to traverse path: {:?}", path), 2);
-                self.traverse_import(&path)
+                self.traverse_import(&path, component_name)
             }
             Err(_) => {
-                // we assume the import is a node_module
                 Logger::debug(&format!("Resolved import to node_module: {:?}", import_path), 2);
                 Some(PathBuf::from(import_path))
             }
@@ -85,16 +89,9 @@ impl<'a> FileVisitor<'a> {
     }
 
     /// Traverse an import path and update the component graph
-    fn traverse_import(&self, path: &PathBuf) -> Option<PathBuf> {
+    fn traverse_import(&self, path: &PathBuf, component_name: &str) -> Option<PathBuf> {
         if path.is_file() {
-            let content = fs::read_to_string(path);
-
-            if let Err(e) = content {
-                Logger::debug(&format!("Error reading file: {:?}", e), 2);
-                return None;
-            }
-
-            let content = content.unwrap();
+            let content = fs::read_to_string(path).ok()?;
             let extension = path.extension().unwrap_or_default();
 
             // abort traversing if the path is not a JS/TS file
@@ -103,49 +100,37 @@ impl<'a> FileVisitor<'a> {
                 return None;
             }
 
+            // If it's a .tsx file and exports our component, return it
+            if extension == "tsx" {
+                return Some(path.clone());
+            }
+
             let module = ProjectTraverser::parse_typescript(&content);
 
             for item in &module.body {
-                Logger::debug(&format!("Visiting item: {:?}", item), 3);
-
-                if let ModuleItem::ModuleDecl(ModuleDecl::ExportDecl(export_decl)) = item {
-                    Logger::debug(&format!("Visiting export decl: {:?}", export_decl), 3);
-                    if let Decl::Var(var_decl) = &export_decl.decl {
-                        Logger::debug(&format!("Visiting var decl: {:?}", var_decl), 3);
-                        for decl in &var_decl.decls {
-                            if let Pat::Ident(_ident) = &decl.name {
-                                Logger::debug("Found component", 3);
-                                return Some(path.clone());
+                if let ModuleItem::ModuleDecl(ModuleDecl::ExportNamed(export_named)) = item {
+                    // Check if this export includes our component
+                    for specifier in &export_named.specifiers {
+                        if let ExportSpecifier::Named(named) = specifier {
+                            if let ModuleExportName::Ident(ident) = &named.orig {
+                                if ident.sym.to_string() == component_name {
+                                    // Found our component, follow this export
+                                    if let Some(src) = &export_named.src {
+                                        let new_path_str = src.value.to_string();
+                                        let base = FileName::Real(path.clone());
+                                        if let Ok(resolved) = self.resolver.resolve(&base, &new_path_str) {
+                                            let new_path = PathBuf::from(resolved.filename.to_string());
+                                            return self.traverse_import(&new_path, component_name);
+                                        }
+                                    }
+                                }
                             }
                         }
-                    } else if let Decl::Fn(_) = &export_decl.decl {
-                        Logger::debug("Found function", 3);
-                        return Some(path.clone());
-                    }
-                } else if let ModuleItem::ModuleDecl(ModuleDecl::ExportNamed(export_named)) = item {
-                    Logger::debug(&format!("Visiting export named: {:?}", export_named), 3);
-                    if let Some(src) = &export_named.src {
-                        let new_path_str = src.value.to_string();
-                        let base = FileName::Real(path.clone());
-                        if let Ok(resolved) = self.resolver.resolve(&base, &new_path_str) {
-                            let new_path = PathBuf::from(resolved.filename.to_string());
-                            Logger::debug(&format!("Resolved import to: {:?}", new_path), 3);
-                            return self.traverse_import(&new_path);
-                        }
-                    }
-                } else if let ModuleItem::ModuleDecl(ModuleDecl::ExportAll(export_all)) = item {
-                    let new_path_str = export_all.src.value.to_string();
-                    let base = FileName::Real(path.clone());
-                    if let Ok(resolved) = self.resolver.resolve(&base, &new_path_str) {
-                        let new_path = PathBuf::from(resolved.filename.to_string());
-                        Logger::debug(&format!("Resolved import to: {:?}", new_path), 3);
-                        return self.traverse_import(&new_path);
                     }
                 }
             }
         }
 
-        Logger::debug(&format!("File not found: {:?}", path), 2);
         None
     }
 
@@ -480,15 +465,19 @@ mod tests {
             .has_component("MyComponent", &my_component_file_path));
         assert!(visitor.component_graph.has_component("Button", &file_path));
         assert!(visitor.component_graph.graph.node_count() == 2);
-        assert!(visitor
-            .component_graph
-            .graph
-            .edges(visitor
+        assert!(
+            visitor
                 .component_graph
-                .get_component("MyComponent", &my_component_file_path)
-                .unwrap())
-            .count()
-            == 1);
+                .graph
+                .edges(
+                    visitor
+                        .component_graph
+                        .get_component("MyComponent", &my_component_file_path)
+                        .unwrap()
+                )
+                .count()
+                == 1
+        );
     }
 
     #[test]

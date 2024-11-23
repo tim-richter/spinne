@@ -1,6 +1,6 @@
+use serde_json::Value;
 use std::fs;
 use std::path::Path;
-use serde_json::Value;
 
 const HTML_TEMPLATE: &str = include_str!("./templates/component-graph.html");
 
