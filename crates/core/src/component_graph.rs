@@ -2,7 +2,7 @@ use petgraph::{graph::NodeIndex, Graph};
 use serde::{Deserialize, Serialize};
 use std::{collections::HashMap, path::PathBuf};
 
-use crate::logging::Logger;
+use spinne_logger::Logger;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Component {

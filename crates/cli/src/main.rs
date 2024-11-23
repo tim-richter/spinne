@@ -1,8 +1,9 @@
 use clap::Parser;
-use spinne::logging::Logger;
+use spinne_logger::Logger;
 use std::{fs::File, path::PathBuf};
 
-use spinne::{HtmlGenerator, ProjectTraverser};
+use spinne_html::HtmlGenerator;
+use spinne_core::ProjectTraverser;
 
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]

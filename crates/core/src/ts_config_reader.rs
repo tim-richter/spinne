@@ -1,7 +1,7 @@
 use std::fs;
 use std::path::PathBuf;
 
-use crate::logging::Logger;
+use spinne_logger::Logger;
 
 /// Handles interactions with tsconfig.json
 pub struct TsConfigReader;

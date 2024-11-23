@@ -1,4 +1,3 @@
-use crate::logging::Logger;
 use crate::{component_graph::ComponentGraph, config::Config, ProjectTraverser};
 use std::path::PathBuf;
 use std::{collections::HashMap, fs, path::Path, sync::Arc};
@@ -9,6 +8,7 @@ use swc_ecma_loader::{
     resolve::Resolve, resolvers::node::NodeModulesResolver, resolvers::tsc::TsConfigResolver,
 };
 use swc_ecma_visit::{Visit, VisitWith};
+use spinne_logger::Logger;
 
 /// FileVisitor is a visitor for TypeScript files.
 /// It traverses the file system and updates the component graph.
@@ -111,10 +111,24 @@ impl<'a> FileVisitor<'a> {
                 if let ModuleItem::ModuleDecl(ModuleDecl::ExportNamed(export_named)) = item {
                     // Check if this export includes our component
                     for specifier in &export_named.specifiers {
-                        if let ExportSpecifier::Named(named) = specifier {
-                            if let ModuleExportName::Ident(ident) = &named.orig {
-                                if ident.sym.to_string() == component_name {
-                                    // Found our component, follow this export
+                        match specifier {
+                            ExportSpecifier::Named(named) => {
+                                if let ModuleExportName::Ident(ident) = &named.orig {
+                                    if ident.sym.to_string() == component_name {
+                                        // Found our component, follow this export
+                                        if let Some(src) = &export_named.src {
+                                            let new_path_str = src.value.to_string();
+                                            let base = FileName::Real(path.clone());
+                                            if let Ok(resolved) = self.resolver.resolve(&base, &new_path_str) {
+                                                let new_path = PathBuf::from(resolved.filename.to_string());
+                                                return self.traverse_import(&new_path, component_name);
+                                            }
+                                        }
+                                    }
+                                }
+                            },
+                            ExportSpecifier::Default(_) => {
+                                if component_name == "default" {
                                     if let Some(src) = &export_named.src {
                                         let new_path_str = src.value.to_string();
                                         let base = FileName::Real(path.clone());
@@ -124,8 +138,17 @@ impl<'a> FileVisitor<'a> {
                                         }
                                     }
                                 }
-                            }
+                            },
+                            _ => {}
                         }
+                    }
+                } else if let ModuleItem::ModuleDecl(ModuleDecl::ExportDefaultExpr(_)) = item {
+                    if component_name == "default" {
+                        return Some(path.clone());
+                    }
+                } else if let ModuleItem::ModuleDecl(ModuleDecl::ExportDefaultDecl(_)) = item {
+                    if component_name == "default" {
+                        return Some(path.clone());
                     }
                 }
             }

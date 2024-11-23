@@ -15,7 +15,7 @@ static PROGRESS_BAR: Lazy<Arc<Mutex<Option<ProgressBar>>>> =
 /// # Examples
 ///
 /// ```
-/// use spinne::logging::Logger;
+/// use spinne_logger::Logger;
 /// Logger::info("Hello, world!");
 /// Logger::warn("This is a warning!");
 /// Logger::error("This is an error!");

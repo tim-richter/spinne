@@ -1,0 +1,26 @@
+[package]
+name = "spinne-core"
+version = "0.2.0"
+edition = "2021"
+license = "MIT"
+authors = ["Tim Richter <tim@timrichter.dev>"]
+repository = "https://github.com/tim-richter/spinne"
+
+[dependencies]
+spinne-logger = { path = "../logger" }
+petgraph = "0.6"
+serde = { workspace = true }
+serde_json = { workspace = true }
+swc_common = { version = "4", features = ['tty-emitter']}
+swc_ecma_ast = "4"
+swc_ecma_loader = { version = "4", features = ['node', 'tsc']}
+swc_ecma_visit = "4"
+swc_ecma_parser = { version = "5", features = ['typescript']}
+glob = "0.3"
+jsonc-parser = { version = "0.26", features = ["serde"] }
+ignore = "0.4"
+
+[dev-dependencies]
+tempfile = { workspace = true }
+assert_cmd = { workspace = true }
+predicates = { workspace = true }

@@ -1,4 +1,5 @@
-use spinne::{logging::Logger, ProjectTraverser};
+use spinne_core::ProjectTraverser;
+use spinne_logger::Logger;
 use std::fs;
 use tempfile::TempDir;
 
