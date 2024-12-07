@@ -4,6 +4,7 @@ mod file_visitor;
 mod package_json;
 mod traverse;
 mod ts_config_reader;
+mod util;
 
 pub use component_graph::ComponentGraph;
 pub use config::Config;

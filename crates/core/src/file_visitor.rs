@@ -1,6 +1,7 @@
+use crate::util::normalize_path;
 use crate::{component_graph::ComponentGraph, config::Config, ProjectTraverser};
 use std::path::PathBuf;
-use std::{collections::HashMap, fs, path::Path, sync::Arc};
+use std::{collections::HashMap, fs, sync::Arc};
 use swc_common::{collections::AHashMap, FileName};
 use swc_ecma_ast::*;
 use swc_ecma_loader::TargetEnv;
@@ -12,6 +13,13 @@ use spinne_logger::Logger;
 
 /// FileVisitor is a visitor for TypeScript files.
 /// It traverses the file system and updates the component graph.
+///
+/// The general approach here is:
+/// 1. Traverse the given file to find react components
+/// 2. Find used children components
+/// 3. For each child component we have to traverse the file system to find the root component
+/// 4. If the child component uses props, we also add that to the graph
+/// 5. Add the component + info to the graph
 pub struct FileVisitor<'a> {
     pub component_graph: &'a mut ComponentGraph,
     pub imports: HashMap<String, String>,
@@ -30,7 +38,7 @@ impl<'a> FileVisitor<'a> {
             component_graph,
             imports: HashMap::new(),
             current_component: None,
-            file_path: PathBuf::from(Self::normalize_path(&file_path)),
+            file_path: PathBuf::from(normalize_path(&file_path)),
             resolver: TsConfigResolver::new(
                 NodeModulesResolver::without_node_modules(
                     TargetEnv::Node,
@@ -43,22 +51,9 @@ impl<'a> FileVisitor<'a> {
         }
     }
 
-    /// Normalize the file path to an absolute path.
-    fn normalize_path(file_path: &str) -> PathBuf {
-        Path::new(file_path)
-            .canonicalize()
-            .unwrap_or_else(|_| Path::new(file_path).to_path_buf())
-    }
-
     /// Resolve a component name to a file path.
     fn resolve_component_path(&mut self, component_name: &str) -> Option<PathBuf> {
-        Logger::debug(
-            &format!(
-                "Starting to resolve component path for: {:?}",
-                component_name
-            ),
-            2,
-        );
+        Logger::debug(&format!("Starting to resolve import path for: {:?}", component_name), 2);
         let import_path = self.imports.get(component_name)?;
         let resolved_path = self.resolve_import(import_path, component_name);
 
