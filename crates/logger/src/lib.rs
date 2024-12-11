@@ -19,7 +19,9 @@ static PROGRESS_BAR: Lazy<Arc<Mutex<Option<ProgressBar>>>> =
 /// Logger::info("Hello, world!");
 /// Logger::warn("This is a warning!");
 /// Logger::error("This is an error!");
+/// Logger::set_level(1);
 /// Logger::debug("This is a debug message with level 1!", 1);
+/// Logger::set_level(2);
 /// Logger::debug("This is a debug message with level 2!", 2);
 /// Logger::loading("Loading...");
 /// Logger::done_loading();
