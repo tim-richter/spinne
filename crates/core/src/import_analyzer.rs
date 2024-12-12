@@ -1,7 +1,7 @@
 use oxc_allocator::Allocator;
 use oxc_parser::Parser;
 use oxc_span::SourceType;
-use oxc_semantic::{Semantic, SemanticBuilder, SemanticBuilderReturn, SymbolId};
+use oxc_semantic::{AstNode, NodeId, Semantic, SemanticBuilder, SemanticBuilderReturn, SymbolId};
 use oxc_ast::{ast::Expression, AstKind};
 use std::{collections::HashMap, sync::Arc};
 use spinne_logger::Logger;
@@ -19,7 +19,7 @@ impl ImportAnalyzer {
     }
 
     /// Analyze imports in a file's content using symbol analysis
-    pub fn analyze(&mut self, content: Arc<str>, target_symbol: String) -> Result<&HashMap<String, String>, String> {
+    pub fn analyze(&mut self, content: Arc<str>, target_symbol: String) -> Result<NodeId, String> {
         Logger::debug("Analyzing imports using symbol analysis", 2);
 
         // Setup allocator and source type
@@ -55,42 +55,51 @@ impl ImportAnalyzer {
               println!("Semantic analysis failed:\n\n{error_message}",);
           }
 
-        self.analyze_references(&semantic.semantic, target_symbol);
+        let import_node = self.analyze_references(&semantic.semantic, target_symbol);
 
-        Logger::debug(&format!("Found imports: {:?}", self.imports), 3);
-        Ok(&self.imports)
+        if let Some(import_node) = import_node {
+            return Ok(import_node);
+        }
+
+        Err("No import found".to_string())
     }
 
-    fn analyze_references(&mut self, semantic: &Semantic, target_symbol: String) {
+    fn analyze_references(&mut self, semantic: &Semantic, target_symbol: String) -> Option<NodeId> {
         let symbols = semantic.symbols();
-        for symbol in symbols.symbol_ids() {
-            if symbols.get_name(symbol) != target_symbol {
+
+        let base_symbol = if let Some(dot_index) = target_symbol.find('.') {
+            target_symbol[..dot_index].to_string()
+        } else {
+            target_symbol
+        };
+
+        for symbol_id in symbols.symbol_ids() {
+            if symbols.get_name(symbol_id) != base_symbol {
                 continue;
             }
-            
-            let declaration = symbols.get_declaration(symbol);
+
+            let declaration = symbols.get_declaration(symbol_id);
             let declaration_node = semantic.nodes().get_node(declaration);
 
-            // Get the AST node for this declaration
-            match &declaration_node.kind() {
-                AstKind::VariableDeclarator(var_decl) => {
-                    if let Some(init) = &var_decl.init {
-                        match init {
-                            Expression::Identifier(ident) => {
-                                let reference = symbols.get_reference(ident.reference_id());
-                                let declaration_symbol = symbols.get_declaration(reference.symbol_id().unwrap());
-                                let declaration_node = semantic.nodes().get_node(declaration_symbol);
-                                if matches!(declaration_node.kind(), AstKind::ImportDeclaration(_) | AstKind::ImportSpecifier(_) | AstKind::ImportDefaultSpecifier(_) | AstKind::ImportNamespaceSpecifier(_)) {
-                                    println!("Import declaration: {:#?}", declaration_node);
-                                }
-                            }
-                            _ => {}
+            // If we found an import, we're done!
+            if matches!(declaration_node.kind(), AstKind::ImportDeclaration(_) | AstKind::ImportSpecifier(_) | AstKind::ImportDefaultSpecifier(_)) {
+                return Some(declaration);
+            }
+
+            // If not an import, check if it's a variable declaration and follow its reference
+            if let AstKind::VariableDeclarator(var_decl) = declaration_node.kind() {
+                if let Some(init) = &var_decl.init {
+                    if let Expression::Identifier(ident) = init {
+                        // Recursively search for the new target and return its result
+                        if let Some(node) = self.analyze_references(semantic, ident.name.to_string()) {
+                            return Some(node);
                         }
                     }
                 }
-                _ => {}
             }
         }
+
+        None
     }
 }
 
@@ -111,6 +120,156 @@ mod tests {
             }
         "#;
 
-        analyzer.analyze(Arc::from(content), "AnotherButton".to_string()).unwrap();
-    } 
+        let result = analyzer.analyze(Arc::from(content), "AnotherButton".to_string());
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), NodeId::new(3));
+    }
+
+    #[test]
+    fn test_default_import() {
+        let mut analyzer = ImportAnalyzer::new();
+        let content = r#"
+            import Button from './components/Button';
+
+            const AnotherButton = Button;
+
+            const CustomButton = () => {
+                return <AnotherButton />;
+            }
+        "#;
+
+        let result = analyzer.analyze(Arc::from(content), "AnotherButton".to_string());
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), NodeId::new(3));
+    }
+
+    #[test]
+    fn test_import_with_multiple_assignments() {
+        let mut analyzer = ImportAnalyzer::new();
+        let content = r#"
+            import Button, { Test } from './components/Button';
+
+            const AnotherButton = Button;
+            const TestButton = AnotherButton;
+
+            const CustomButton = () => {
+                return <TestButton />;
+            }
+        "#;
+
+        let result = analyzer.analyze(Arc::from(content), "AnotherButton".to_string());
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), NodeId::new(3));
+    }
+
+    #[test]
+    fn test_import_in_multiple_scopes() {
+        let mut analyzer = ImportAnalyzer::new();
+        let content = r#"
+            import Button, { Test } from './components/Button';
+
+            const AnotherButton = Button;
+
+            const CustomButton = () => {
+                const TestButton = AnotherButton;
+                return <TestButton />;
+            }
+        "#;
+
+        let result = analyzer.analyze(Arc::from(content), "AnotherButton".to_string());
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), NodeId::new(3));
+    }
+
+    #[test]
+    fn test_import_with_scope_shadowing() {
+        let mut analyzer = ImportAnalyzer::new();
+        let content = r#"
+            import Button, { Test } from './components/Button';
+
+            const AnotherButton = Button;
+            const TestButton = AnotherButton;
+
+            const CustomButton = () => {
+                const TestButton = Button;
+                return <TestButton />;
+            }
+        "#;
+
+        let result = analyzer.analyze(Arc::from(content), "TestButton".to_string());
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), NodeId::new(3));
+    }
+
+    #[test]
+    fn test_import_object_destructuring() {
+        let mut analyzer = ImportAnalyzer::new();
+        let content = r#"
+            import Button, { Test } from './components/Button';
+
+            const { TestButton } = Button;
+
+            const CustomButton = () => {
+                return <TestButton />;
+            }
+        "#;
+
+        let result = analyzer.analyze(Arc::from(content), "TestButton".to_string());
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), NodeId::new(3));
+    }
+
+    #[test]
+    fn test_import_array_destructuring() {
+        let mut analyzer = ImportAnalyzer::new();
+        let content = r#"
+            import Button, { Test } from './components/Button';
+
+            const [ TestButton ] = Button;
+
+            const CustomButton = () => {
+                return <TestButton />;
+            }
+        "#;
+
+        let result = analyzer.analyze(Arc::from(content), "TestButton".to_string());
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), NodeId::new(3));
+    }
+
+    #[test]
+    fn test_import_component_with_dot() {
+        let mut analyzer = ImportAnalyzer::new();
+        let content = r#"
+            import Button, { Test } from './components/Button';
+
+            const TestButton = Button;
+
+            const CustomButton = () => {
+                return <TestButton.Danger />;
+            }
+        "#;
+
+        let result = analyzer.analyze(Arc::from(content), "TestButton.Danger".to_string());
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), NodeId::new(3));
+    }
+
+    #[test]
+    fn test_import_component_with_dot_multiple() {
+        let mut analyzer = ImportAnalyzer::new();
+        let content = r#"
+            import Button, { Test } from './components/Button';
+
+            const TestButton = Button;
+
+            const CustomButton = () => {
+                return <TestButton.Danger.Primary />;
+            }
+        "#;
+
+        let result = analyzer.analyze(Arc::from(content), "TestButton.Danger".to_string());
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), NodeId::new(3));
+    }
 } 
