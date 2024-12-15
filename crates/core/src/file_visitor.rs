@@ -1,5 +1,6 @@
 use crate::util::normalize_path;
-use crate::{ComponentGraph, config::Config, ProjectTraverser};
+use crate::{config::Config, ComponentGraph, ProjectTraverser};
+use spinne_logger::Logger;
 use std::path::PathBuf;
 use std::{collections::HashMap, fs, sync::Arc};
 use swc_common::{collections::AHashMap, FileName};
@@ -9,7 +10,6 @@ use swc_ecma_loader::{
     resolve::Resolve, resolvers::node::NodeModulesResolver, resolvers::tsc::TsConfigResolver,
 };
 use swc_ecma_visit::{Visit, VisitWith};
-use spinne_logger::Logger;
 
 /// FileVisitor is a visitor for TypeScript files.
 /// It traverses the file system and updates the component graph.
@@ -53,7 +53,10 @@ impl<'a> FileVisitor<'a> {
 
     /// Resolve a component name to a file path.
     fn resolve_component_path(&mut self, component_name: &str) -> Option<PathBuf> {
-        Logger::debug(&format!("Starting to resolve import path for: {:?}", component_name), 2);
+        Logger::debug(
+            &format!("Starting to resolve import path for: {:?}", component_name),
+            2,
+        );
         let import_path = self.imports.get(component_name)?;
         let resolved_path = self.resolve_import(import_path, component_name);
 
@@ -77,7 +80,10 @@ impl<'a> FileVisitor<'a> {
                 self.traverse_import(&path, component_name)
             }
             Err(_) => {
-                Logger::debug(&format!("Resolved import to node_module: {:?}", import_path), 2);
+                Logger::debug(
+                    &format!("Resolved import to node_module: {:?}", import_path),
+                    2,
+                );
                 Some(PathBuf::from(import_path))
             }
         }
@@ -114,26 +120,33 @@ impl<'a> FileVisitor<'a> {
                                         if let Some(src) = &export_named.src {
                                             let new_path_str = src.value.to_string();
                                             let base = FileName::Real(path.clone());
-                                            if let Ok(resolved) = self.resolver.resolve(&base, &new_path_str) {
-                                                let new_path = PathBuf::from(resolved.filename.to_string());
-                                                return self.traverse_import(&new_path, component_name);
+                                            if let Ok(resolved) =
+                                                self.resolver.resolve(&base, &new_path_str)
+                                            {
+                                                let new_path =
+                                                    PathBuf::from(resolved.filename.to_string());
+                                                return self
+                                                    .traverse_import(&new_path, component_name);
                                             }
                                         }
                                     }
                                 }
-                            },
+                            }
                             ExportSpecifier::Default(_) => {
                                 if component_name == "default" {
                                     if let Some(src) = &export_named.src {
                                         let new_path_str = src.value.to_string();
                                         let base = FileName::Real(path.clone());
-                                        if let Ok(resolved) = self.resolver.resolve(&base, &new_path_str) {
-                                            let new_path = PathBuf::from(resolved.filename.to_string());
+                                        if let Ok(resolved) =
+                                            self.resolver.resolve(&base, &new_path_str)
+                                        {
+                                            let new_path =
+                                                PathBuf::from(resolved.filename.to_string());
                                             return self.traverse_import(&new_path, component_name);
                                         }
                                     }
                                 }
-                            },
+                            }
                             _ => {}
                         }
                     }

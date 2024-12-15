@@ -1,5 +1,5 @@
-use spinne_logger::Logger;
 use serde_json::Value;
+use spinne_logger::Logger;
 use std::fs;
 use std::path::PathBuf;
 

@@ -6,11 +6,10 @@ use swc_ecma_parser::{lexer::Lexer, Parser, StringInput, Syntax, TsSyntax};
 
 use swc_ecma_visit::Visit;
 
-use spinne_logger::Logger;
 use crate::{
-    ComponentGraph, config::Config, file_visitor::FileVisitor,
-    ts_config_reader::TsConfigReader,
+    config::Config, file_visitor::FileVisitor, ts_config_reader::TsConfigReader, ComponentGraph,
 };
+use spinne_logger::Logger;
 
 /// ProjectTraverser is responsible for traversing the project and analyzing TypeScript files
 pub struct ProjectTraverser {

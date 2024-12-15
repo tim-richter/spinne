@@ -1,14 +1,16 @@
-
-use oxc_semantic::{NodeId, Semantic, };
 use oxc_ast::{ast::Expression, AstKind};
+use oxc_semantic::{NodeId, Semantic};
 use spinne_logger::Logger;
 
 /// Find the node id of the import for a given symbol in a file's content
-/// 
+///
 /// Has additional logic to handle dot notation for components and tries to find the node id for the root component only
-/// 
+///
 /// If the symbol is not found, it will return an error
-pub fn find_import_for_symbol(semantic: &Semantic, target_symbol: String) -> Result<NodeId, String> {
+pub fn find_import_for_symbol(
+    semantic: &Semantic,
+    target_symbol: String,
+) -> Result<NodeId, String> {
     Logger::debug("Analyzing imports using symbol analysis", 2);
 
     let import_node = recursive_find(&semantic, target_symbol);
@@ -21,7 +23,7 @@ pub fn find_import_for_symbol(semantic: &Semantic, target_symbol: String) -> Res
 }
 
 /// Recursively find the node id of the import for a given symbol in a file's content
-/// 
+///
 /// We need to search for declarations of the target symbol and follow references to find the root component
 /// If we find a import declaration, we return the node id
 /// If we find a variable declaration, we recursively search for the target symbol in the variable's initializer
@@ -43,7 +45,12 @@ fn recursive_find(semantic: &Semantic, target_symbol: String) -> Option<NodeId> 
         let declaration_node = semantic.nodes().get_node(declaration);
 
         // If we found an import, we're done!
-        if matches!(declaration_node.kind(), AstKind::ImportDeclaration(_) | AstKind::ImportSpecifier(_) | AstKind::ImportDefaultSpecifier(_)) {
+        if matches!(
+            declaration_node.kind(),
+            AstKind::ImportDeclaration(_)
+                | AstKind::ImportSpecifier(_)
+                | AstKind::ImportDefaultSpecifier(_)
+        ) {
             return Some(declaration);
         }
 
@@ -68,21 +75,19 @@ mod tests {
     use super::*;
     use oxc_allocator::Allocator;
     use oxc_parser::Parser;
-    use oxc_span::SourceType;
     use oxc_semantic::{SemanticBuilder, SemanticBuilderReturn};
+    use oxc_span::SourceType;
 
     fn setup_semantic<'a>(allocator: &'a Allocator, content: &'a str) -> SemanticBuilderReturn<'a> {
-      let source_type = SourceType::default().with_typescript(true).with_jsx(true);
-  
-      // Parse the source code
-      let parser_ret = Parser::new(&allocator, &content, source_type)
-          .parse();
-  
-      let program = parser_ret.program;
-  
-      // Build semantic analysis
-      SemanticBuilder::new()
-          .build(&program)
+        let source_type = SourceType::default().with_typescript(true).with_jsx(true);
+
+        // Parse the source code
+        let parser_ret = Parser::new(&allocator, &content, source_type).parse();
+
+        let program = parser_ret.program;
+
+        // Build semantic analysis
+        SemanticBuilder::new().build(&program)
     }
 
     #[test]
@@ -259,4 +264,4 @@ mod tests {
         assert!(result.is_ok());
         assert_eq!(result.unwrap(), NodeId::new(3));
     }
-} 
+}

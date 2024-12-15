@@ -1,5 +1,5 @@
-mod reference;
 mod react;
+mod reference;
 
-pub use reference::find_import_for_symbol;
 pub use react::find_root_components;
+pub use reference::find_import_for_symbol;
