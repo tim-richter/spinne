@@ -25,6 +25,8 @@ oxc_semantic = "0.40"
 oxc_span = "0.40"
 itertools = "0.13"
 oxc_ast = "0.40"
+oxc-miette = "1"
+oxc_resolver = "3"
 
 [dev-dependencies]
 tempfile = { workspace = true }

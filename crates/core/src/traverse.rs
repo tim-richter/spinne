@@ -8,7 +8,7 @@ use swc_ecma_visit::Visit;
 
 use spinne_logger::Logger;
 use crate::{
-    component_graph::ComponentGraph, config::Config, file_visitor::FileVisitor,
+    ComponentGraph, config::Config, file_visitor::FileVisitor,
     ts_config_reader::TsConfigReader,
 };
 

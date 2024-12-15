@@ -1,5 +1,5 @@
 use crate::util::normalize_path;
-use crate::{component_graph::ComponentGraph, config::Config, ProjectTraverser};
+use crate::{ComponentGraph, config::Config, ProjectTraverser};
 use std::path::PathBuf;
 use std::{collections::HashMap, fs, sync::Arc};
 use swc_common::{collections::AHashMap, FileName};
