@@ -68,7 +68,10 @@ pub fn find_root_components<'a>(semantic: &'a Semantic) -> Vec<(&'a str, &'a Exp
                         Some(identifier) => identifier,
                         None => continue,
                     };
-                    Logger::debug(&format!("Analyzing variable declaration: {}", identifier), 3);
+                    Logger::debug(
+                        &format!("Analyzing variable declaration: {}", identifier),
+                        3,
+                    );
 
                     let type_annotation = type_annotation.as_ref();
 

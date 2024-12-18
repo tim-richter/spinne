@@ -1,10 +1,15 @@
-use std::{fs, path::{Path, PathBuf}};
+use std::{
+    fs,
+    path::{Path, PathBuf},
+};
 
 use ignore::{overrides::OverrideBuilder, DirEntry, Error, WalkBuilder, WalkParallel, WalkState};
 use oxc_allocator::Allocator;
 use spinne_logger::Logger;
 
-use crate::{analyze::react::analyzer::ReactAnalyzer, parse::parse_tsx, ComponentGraph, PackageJson};
+use crate::{
+    analyze::react::analyzer::ReactAnalyzer, parse::parse_tsx, ComponentGraph, PackageJson,
+};
 
 pub struct Project {
     project_root: PathBuf,
@@ -42,24 +47,26 @@ impl Project {
     pub fn traverse(&self, exclude: &[String], include: &[String]) {
         let walker = self.build_walker(exclude, include);
 
-        walker.run(|| Box::new(|result: Result<DirEntry, Error>| {
-            match result {
-                Ok(entry) => {
-                    let path = entry.path();
+        walker.run(|| {
+            Box::new(|result: Result<DirEntry, Error>| {
+                match result {
+                    Ok(entry) => {
+                        let path = entry.path();
 
-                    if path.is_file() {
-                        Logger::debug(&format!("Analyzing file: {}", path.display()), 2);
-                        self.analyze_file(&path);
+                        if path.is_file() {
+                            Logger::debug(&format!("Analyzing file: {}", path.display()), 2);
+                            self.analyze_file(&path);
+                        }
                     }
-                },
-                Err(e) => Logger::error(&format!("Error while walking file: {}", e)),
-            }
+                    Err(e) => Logger::error(&format!("Error while walking file: {}", e)),
+                }
 
-            WalkState::Continue
-        }));
+                WalkState::Continue
+            })
+        });
     }
 
-    fn build_walker(&self, exclude: &[String], include: &[String],) -> WalkParallel {
+    fn build_walker(&self, exclude: &[String], include: &[String]) -> WalkParallel {
         let exclude_patterns: Vec<String> = exclude
             .iter()
             .map(|pattern| format!("!{}", pattern)) // Add '!' to each pattern
@@ -123,11 +130,15 @@ mod tests {
 
         fs::write(project_root.join("package.json"), "{\"name\": \"test\"}").unwrap();
         fs::write(project_root.join("tsconfig.json"), "{}").unwrap();
-        fs::write(src_dir.join("index.tsx"), r#"
+        fs::write(
+            src_dir.join("index.tsx"),
+            r#"
             import React from 'react';
 
             const App: React.FC = () => { return <div>Hello World</div>; }
-        "#).unwrap();
+        "#,
+        )
+        .unwrap();
 
         let project = Project::new(project_root);
         project.traverse(&[], &["**/*.tsx".to_string(), "**/*.ts".to_string()]);
