@@ -1,5 +1,5 @@
 use oxc_ast::{
-    ast::{TSType, TSTypeName},
+    ast::{Expression, TSType, TSTypeName},
     AstKind,
 };
 use oxc_semantic::Semantic;
@@ -39,8 +39,8 @@ fn has_react_type_annotation(type_annotation: &TSType) -> bool {
 }
 
 /// find react components in ast with oxc
-pub fn find_root_components(semantic: &Semantic) -> Vec<String> {
-    let mut components = Vec::new();
+pub fn find_root_components<'a>(semantic: &'a Semantic) -> Vec<(&'a str, &'a Expression<'a>)> {
+    let mut components: Vec<(&'a str, &'a Expression<'a>)> = Vec::new();
 
     for node in semantic.nodes().iter() {
         match node.kind() {
@@ -49,23 +49,26 @@ pub fn find_root_components(semantic: &Semantic) -> Vec<String> {
                     Some(name) => name,
                     None => continue,
                 };
-
-                if has_correct_case(&name.to_string()) {
-                    components.push(name.to_string());
-                }
+                // TODO: check if the function is a react component
             }
             AstKind::VariableDeclaration(var_decl) => {
                 let name = var_decl.declarations.first();
 
                 if let Some(name) = name {
                     let id = &name.id;
-                    let identifier = &id.get_identifier();
+                    let identifier = id.get_identifier();
                     let type_annotation = &id.type_annotation;
+
+                    let init = match &name.init {
+                        Some(init) => init,
+                        None => continue,
+                    };
 
                     let identifier = match identifier {
                         Some(identifier) => identifier,
                         None => continue,
                     };
+                    Logger::debug(&format!("Analyzing variable declaration: {}", identifier), 3);
 
                     let type_annotation = type_annotation.as_ref();
 
@@ -73,7 +76,7 @@ pub fn find_root_components(semantic: &Semantic) -> Vec<String> {
                         if has_react_type_annotation(&type_annotation.type_annotation)
                             && has_correct_case(&identifier.to_string())
                         {
-                            components.push(identifier.to_string());
+                            components.push((identifier.as_str(), &init));
                         }
                     } else {
                         Logger::debug("type_annotation is None", 2);
@@ -112,35 +115,36 @@ mod tests {
     fn test_find_react_fc_components() {
         let allocator = Allocator::default();
         let content = r#"
-      import React from 'react';
+    import React from 'react';
 
-      const Button: React.FC = () => {
-        return <div>Hello</div>;
-      }
-    "#;
+    const Button: React.FC = () => {
+      return <div>Hello</div>;
+    }
+  "#;
         let semantic = setup_semantic(&allocator, content);
         let components = find_root_components(&semantic.semantic);
 
-        assert_eq!(components, vec!["Button"]);
+        assert_eq!(components[0].0, "Button");
     }
 
     #[test]
     fn test_find_fc_components() {
         let allocator = Allocator::default();
         let content = r#"
-      import { FC } from 'react';
+    import { FC } from 'react';
 
-      const Button: FC = () => {
-        return <div>Hello</div>;
-      }
+    const Button: FC = () => {
+      return <div>Hello</div>;
+    }
 
-      const Input: FC = () => {
-        return <input />;
-      }
-    "#;
+    const Input: FC = () => {
+      return <input />;
+    }
+  "#;
         let semantic = setup_semantic(&allocator, content);
         let components = find_root_components(&semantic.semantic);
 
-        assert_eq!(components, vec!["Button", "Input"]);
+        assert_eq!(components[0].0, "Button");
+        assert_eq!(components[1].0, "Input");
     }
 }
