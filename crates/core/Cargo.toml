@@ -11,11 +11,6 @@ spinne-logger = { path = "../logger" }
 petgraph = "0.6"
 serde = { workspace = true }
 serde_json = { workspace = true }
-swc_common = { version = "4", features = ['tty-emitter']}
-swc_ecma_ast = "4"
-swc_ecma_loader = { version = "4", features = ['node', 'tsc']}
-swc_ecma_visit = "4"
-swc_ecma_parser = { version = "5", features = ['typescript']}
 glob = "0.3"
 jsonc-parser = { version = "0.26", features = ["serde"] }
 ignore = "0.4"
