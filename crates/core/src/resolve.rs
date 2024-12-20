@@ -23,10 +23,10 @@ use oxc_resolver::{Resolution, ResolveOptions, Resolver, TsconfigOptions, Tsconf
 pub fn resolve_file_path(
     dir: &PathBuf,
     specifier: &str,
-    tsconfig: &PathBuf,
+    tsconfig: Option<&PathBuf>,
 ) -> Result<Resolution, String> {
     let options = ResolveOptions {
-        tsconfig: Some(TsconfigOptions {
+        tsconfig: tsconfig.map(|tsconfig| TsconfigOptions {
             config_file: tsconfig.to_path_buf(),
             references: TsconfigReferences::Auto,
         }),
@@ -77,11 +77,8 @@ mod tests {
         .unwrap();
         fs::write(&index_file, "import { Button } from './Button';").unwrap();
 
-        let tsconfig_path = root.join("tsconfig.json");
-        fs::write(&tsconfig_path, "{}").unwrap();
-
         let specifier = "./components/Button";
-        let resolution = resolve_file_path(&src_dir, &specifier, &tsconfig_path);
+        let resolution = resolve_file_path(&src_dir, &specifier, None);
 
         assert!(resolution.is_ok());
         assert_eq!(
@@ -124,7 +121,7 @@ mod tests {
         .unwrap();
 
         let specifier = "@components/Button";
-        let resolution = resolve_file_path(&src_dir, &specifier, &tsconfig_path);
+        let resolution = resolve_file_path(&src_dir, &specifier, Some(&tsconfig_path));
 
         assert!(resolution.is_ok());
         assert_eq!(
@@ -151,11 +148,8 @@ mod tests {
         )
         .unwrap();
 
-        let tsconfig_path = root.join("tsconfig.json");
-        fs::write(&tsconfig_path, "{}").unwrap();
-
         let specifier = "framer-motion";
-        let resolution = resolve_file_path(&src_dir, &specifier, &tsconfig_path);
+        let resolution = resolve_file_path(&src_dir, &specifier, None);
 
         assert!(resolution.is_ok());
         assert_eq!(

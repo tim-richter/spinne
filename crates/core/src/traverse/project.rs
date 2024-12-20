@@ -1,6 +1,7 @@
 use std::{
     fs,
     path::{Path, PathBuf},
+    sync::RwLock,
 };
 
 use ignore::{overrides::OverrideBuilder, DirEntry, Error, WalkBuilder, WalkParallel, WalkState};
@@ -8,14 +9,17 @@ use oxc_allocator::Allocator;
 use spinne_logger::Logger;
 
 use crate::{
-    analyze::react::analyzer::ReactAnalyzer, parse::parse_tsx, ComponentGraph, PackageJson,
+    analyze::react::analyzer::ReactAnalyzer, parse::parse_tsx,
+    util::replace_absolute_path_with_project_name, ComponentGraph, PackageJson,
 };
+
+use super::ProjectResolver;
 
 pub struct Project {
     project_root: PathBuf,
     project_name: String,
-    component_graph: ComponentGraph,
-    tsconfig_path: PathBuf,
+    pub component_graph: ComponentGraph,
+    resolver: ProjectResolver,
 }
 
 impl Project {
@@ -35,17 +39,27 @@ impl Project {
             .expect("No project name found in package.json");
 
         let tsconfig_path = project_root.join("tsconfig.json");
+        let resolver = if tsconfig_path.exists() {
+            ProjectResolver::new(Some(tsconfig_path))
+        } else {
+            ProjectResolver::new(None)
+        };
 
         Self {
             project_root,
             project_name,
             component_graph: ComponentGraph::new(),
-            tsconfig_path,
+            resolver,
         }
     }
 
-    pub fn traverse(&self, exclude: &[String], include: &[String]) {
+    pub fn traverse(&mut self, exclude: &[String], include: &[String]) {
+        Logger::info(&format!(
+            "Starting traversal of project: {}",
+            self.project_root.display()
+        ));
         let walker = self.build_walker(exclude, include);
+        let project = RwLock::new(self);
 
         walker.run(|| {
             Box::new(|result: Result<DirEntry, Error>| {
@@ -55,7 +69,7 @@ impl Project {
 
                         if path.is_file() {
                             Logger::debug(&format!("Analyzing file: {}", path.display()), 2);
-                            self.analyze_file(&path);
+                            project.write().unwrap().analyze_file(&path);
                         }
                     }
                     Err(e) => Logger::error(&format!("Error while walking file: {}", e)),
@@ -91,7 +105,7 @@ impl Project {
             .build_parallel()
     }
 
-    fn analyze_file(&self, path: &Path) {
+    fn analyze_file(&mut self, path: &Path) {
         if path.extension().unwrap() == "tsx" || path.extension().unwrap() == "ts" {
             let allocator = Allocator::default();
             let path_buf = PathBuf::from(path);
@@ -107,8 +121,19 @@ impl Project {
 
             let (_parser_ret, semantic_ret) = result.unwrap();
 
-            let react_analyzer = ReactAnalyzer::new(&semantic_ret.semantic);
-            react_analyzer.analyze();
+            let react_analyzer =
+                ReactAnalyzer::new(&semantic_ret.semantic, path_buf, &self.resolver);
+            let components = react_analyzer.analyze();
+
+            for component in components {
+                let path_relative = replace_absolute_path_with_project_name(
+                    self.project_root.clone(),
+                    component.file_path.clone(),
+                    &self.project_name,
+                );
+                self.component_graph
+                    .add_component(component.name, path_relative);
+            }
         }
     }
 }
@@ -140,7 +165,12 @@ mod tests {
         )
         .unwrap();
 
-        let project = Project::new(project_root);
+        let mut project = Project::new(project_root);
         project.traverse(&[], &["**/*.tsx".to_string(), "**/*.ts".to_string()]);
+
+        assert_eq!(project.component_graph.graph.node_count(), 1);
+        assert!(project
+            .component_graph
+            .has_component("App", &PathBuf::from("test/src/index.tsx")));
     }
 }
