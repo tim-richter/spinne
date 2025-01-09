@@ -1,7 +1,6 @@
 use std::{collections::HashMap, path::PathBuf};
 
 use oxc_semantic::Semantic;
-use spinne_logger::Logger;
 
 use crate::{analyze::component::Component, traverse::ProjectResolver};
 
@@ -70,7 +69,6 @@ mod tests {
 
     #[test]
     fn test_analyze() {
-        Logger::set_level(3);
         let files = vec![
             (
                 "src/index.tsx",

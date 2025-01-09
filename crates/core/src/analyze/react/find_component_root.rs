@@ -2,7 +2,7 @@ use std::path::PathBuf;
 
 use oxc_allocator::Allocator;
 use oxc_ast::{
-    ast::{ExportNamedDeclaration, ExportSpecifier, ModuleExportName},
+    ast::{ExportNamedDeclaration, ModuleExportName},
     AstKind, Visit,
 };
 use oxc_semantic::{NodeId, Semantic, SymbolFlags, SymbolId};
