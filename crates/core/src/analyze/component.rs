@@ -40,12 +40,4 @@ impl Component {
             children,
         }
     }
-
-    pub fn add_child(&mut self, child: ComponentChild) {
-        self.children.push(child);
-    }
-
-    pub fn set_file_path_relative_to_root(&mut self, file_path_relative_to_root: PathBuf) {
-        self.file_path_relative_to_root = Some(file_path_relative_to_root);
-    }
 }

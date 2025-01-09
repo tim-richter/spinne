@@ -236,7 +236,10 @@ mod tests {
     use oxc_semantic::{SemanticBuilder, SemanticBuilderReturn};
     use oxc_span::SourceType;
 
-    use crate::{analyze::extract_components, traverse::ProjectResolver, util::test_utils::create_mock_project};
+    use crate::{
+        analyze::react::root_components::extract_components, traverse::ProjectResolver,
+        util::test_utils::create_mock_project,
+    };
 
     fn setup_semantic<'a>(allocator: &'a Allocator, content: &'a str) -> SemanticBuilderReturn<'a> {
         let source_type = SourceType::default().with_typescript(true).with_jsx(true);
@@ -314,7 +317,10 @@ mod tests {
 
         assert_eq!(components[0].name, "Button");
         assert_eq!(components[0].children[0].name, "Input");
-        assert_eq!(components[0].children[0].origin_file_path, PathBuf::from(temp_dir.path().join("src/components/Input.tsx")));
+        assert_eq!(
+            components[0].children[0].origin_file_path,
+            PathBuf::from(temp_dir.path().join("src/components/Input.tsx"))
+        );
         assert_eq!(components[0].children[0].props.len(), 1);
         assert_eq!(components[0].children[0].props.get("placeholder"), Some(&1));
     }
