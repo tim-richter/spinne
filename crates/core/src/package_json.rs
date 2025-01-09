@@ -15,10 +15,10 @@ pub struct PackageJson {
 }
 
 impl PackageJson {
-    /// Creates a new PackageJson instance by reading package.json from the current directory
+    /// Creates a new PackageJson instance by reading package.json from the given path
     pub fn read(path: PathBuf) -> Option<Self> {
         if !path.exists() {
-            Logger::debug(&format!("No package.json found at {}", path.display()), 1);
+            Logger::error(&format!("No package.json found at {}", path.display()));
             return None;
         }
 
@@ -27,7 +27,6 @@ impl PackageJson {
         match fs::read_to_string(&path) {
             Ok(content) => match serde_json::from_str::<Value>(&content) {
                 Ok(mut parsed) => {
-                    Logger::debug("Successfully read package.json", 1);
                     if let Some(json_object) = parsed.as_object_mut() {
                         // Remove large fields that are useless for pragmatic use.
                         json_object.remove("description");
@@ -51,12 +50,12 @@ impl PackageJson {
                     Some(package_json)
                 }
                 Err(e) => {
-                    Logger::debug(&format!("Failed to parse package.json: {}", e), 1);
+                    Logger::error(&format!("Failed to parse package.json: {}", e));
                     None
                 }
             },
             Err(e) => {
-                Logger::debug(&format!("Failed to read package.json: {}", e), 1);
+                Logger::error(&format!("Failed to read package.json: {}", e));
                 None
             }
         }

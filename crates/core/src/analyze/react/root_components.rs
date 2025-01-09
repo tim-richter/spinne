@@ -16,6 +16,8 @@ use crate::{
     util,
 };
 
+use super::{find_component_root, find_import::find_import_for_symbol};
+
 fn has_correct_case(identifier: &str) -> bool {
     util::is_pascal_case(&identifier.to_string())
 }
@@ -51,13 +53,14 @@ fn has_react_type_annotation(type_annotation: &TSType) -> bool {
 pub fn extract_components<'a>(
     semantic: &'a Semantic<'a>,
     resolver: &'a ProjectResolver,
+    file_path: PathBuf,
 ) -> Vec<ComponentRoot> {
     let mut components: Vec<ComponentRoot> = Vec::new();
 
     for node in semantic.nodes().iter() {
         match node.kind() {
             AstKind::Function(fn_decl) => {
-                let name = match fn_decl.name() {
+                match fn_decl.name() {
                     Some(name) => name,
                     None => continue,
                 };
@@ -103,11 +106,15 @@ pub fn extract_components<'a>(
                                         println!("fn_expr: {:?}", fn_expr);
                                     }
                                     Expression::ArrowFunctionExpression(arrow_fn_expr) => {
-                                        let params = &arrow_fn_expr.params.items;
                                         let body = &arrow_fn_expr.body;
+                                        println!("file_path: {}", file_path.display());
 
-                                        let child_components =
-                                            get_child_components(semantic, body, resolver);
+                                        let child_components = get_child_components(
+                                            semantic,
+                                            body,
+                                            resolver,
+                                            file_path.parent().unwrap().to_path_buf(),
+                                        );
                                         component.children = child_components;
                                     }
                                     _ => {}
@@ -131,14 +138,16 @@ pub fn extract_components<'a>(
 struct ReturnVisitor<'a> {
     semantic: &'a Semantic<'a>,
     resolver: &'a ProjectResolver,
+    file_path: PathBuf,
     child_components: Vec<ComponentChild>,
 }
 
 impl<'a> ReturnVisitor<'a> {
-    fn new(semantic: &'a Semantic<'a>, resolver: &'a ProjectResolver) -> Self {
+    fn new(semantic: &'a Semantic<'a>, resolver: &'a ProjectResolver, file_path: PathBuf) -> Self {
         Self {
             semantic,
             resolver,
+            file_path,
             child_components: Vec::new(),
         }
     }
@@ -152,7 +161,7 @@ impl<'a> Visit<'a> for ReturnVisitor<'a> {
                 let ident_name = ident_name.to_string();
 
                 let mut component_child = ComponentChild {
-                    name: ident_name,
+                    name: ident_name.clone(),
                     props: HashMap::new(),
                     origin_file_path: PathBuf::new(),
                 };
@@ -163,10 +172,21 @@ impl<'a> Visit<'a> for ReturnVisitor<'a> {
                     .get_reference(identifier.reference_id());
 
                 if let Some(symbol_id) = reference_id.symbol_id() {
-                    let declaration = self.semantic.symbols().get_declaration(symbol_id);
-                    let declaration_node = self.semantic.nodes().get_node(declaration);
+                    let import_node_id = find_import_for_symbol(self.semantic, symbol_id);
 
-                    println!("declaration_node: {:?}", declaration_node);
+                    if let Ok(import_node_id) = import_node_id {
+                        let component_root = find_component_root(
+                            self.semantic,
+                            self.resolver,
+                            &self.file_path,
+                            import_node_id,
+                            &ident_name,
+                        );
+
+                        if let Some(component_root) = component_root {
+                            component_child.origin_file_path = component_root.1;
+                        }
+                    }
                 }
 
                 jsx_opening_element
@@ -199,8 +219,9 @@ pub fn get_child_components<'a>(
     semantic: &'a Semantic<'a>,
     body: &'a FunctionBody<'a>,
     resolver: &'a ProjectResolver,
+    file_path: PathBuf,
 ) -> Vec<ComponentChild> {
-    let mut visitor = ReturnVisitor::new(semantic, resolver);
+    let mut visitor = ReturnVisitor::new(semantic, resolver, file_path);
     visitor.visit_function_body(body);
 
     visitor.child_components
@@ -208,12 +229,14 @@ pub fn get_child_components<'a>(
 
 #[cfg(test)]
 mod tests {
+    use std::path::PathBuf;
+
     use oxc_allocator::Allocator;
     use oxc_parser::Parser;
     use oxc_semantic::{SemanticBuilder, SemanticBuilderReturn};
     use oxc_span::SourceType;
 
-    use crate::{analyze::extract_components, traverse::ProjectResolver};
+    use crate::{analyze::extract_components, traverse::ProjectResolver, util::test_utils::create_mock_project};
 
     fn setup_semantic<'a>(allocator: &'a Allocator, content: &'a str) -> SemanticBuilderReturn<'a> {
         let source_type = SourceType::default().with_typescript(true).with_jsx(true);
@@ -229,37 +252,70 @@ mod tests {
 
     #[test]
     fn test_find_react_fc_components() {
-        let allocator = Allocator::default();
-        let content = r#"
+        let files = vec![(
+            "src/components/Button.tsx",
+            r#"
     import React from 'react';
 
     const Button: React.FC = () => {
       return <div>Hello</div>;
     }
-  "#;
-        let semantic = setup_semantic(&allocator, content);
-        let components = extract_components(&semantic.semantic, &ProjectResolver::new(None));
+  "#,
+        )];
+        let temp_dir = create_mock_project(&files);
+
+        let allocator = Allocator::default();
+        let semantic = setup_semantic(&allocator, files[0].1);
+        let components = extract_components(
+            &semantic.semantic,
+            &ProjectResolver::new(None),
+            PathBuf::from(temp_dir.path().join("src/components/Button.tsx")),
+        );
 
         assert_eq!(components[0].name, "Button");
     }
 
     #[test]
     fn test_find_fc_components() {
+        let files = vec![
+            (
+                "src/components/Button.tsx",
+                r#"
+                import { FC } from 'react';
+                import { Input } from './Input';
+
+                const Button: FC = () => {
+                return <Input placeholder="Hello" />;
+                }
+
+                const input = <Input placeholder="Hello" />;
+            "#,
+            ),
+            (
+                "src/components/Input.tsx",
+                r#"
+                import React from 'react';
+
+                export const Input: React.FC = () => {
+                    return <input />;
+                }
+            "#,
+            ),
+        ];
+        let temp_dir = create_mock_project(&files);
+
         let allocator = Allocator::default();
-        let content = r#"
-    import { FC } from 'react';
-    import { Input } from './Input';
-
-    const Button: FC = () => {
-      return <Input placeholder="Hello" />;
-    }
-
-    const input = <Input placeholder="Hello" />;
-  "#;
-        let semantic = setup_semantic(&allocator, content);
-        let components = extract_components(&semantic.semantic, &ProjectResolver::new(None));
+        let semantic = setup_semantic(&allocator, &files[0].1);
+        let components = extract_components(
+            &semantic.semantic,
+            &ProjectResolver::new(None),
+            PathBuf::from(temp_dir.path().join("src/components/Button.tsx")),
+        );
 
         assert_eq!(components[0].name, "Button");
-        assert_eq!(components[1].name, "Input");
+        assert_eq!(components[0].children[0].name, "Input");
+        assert_eq!(components[0].children[0].origin_file_path, PathBuf::from(temp_dir.path().join("src/components/Input.tsx")));
+        assert_eq!(components[0].children[0].props.len(), 1);
+        assert_eq!(components[0].children[0].props.get("placeholder"), Some(&1));
     }
 }

@@ -15,6 +15,8 @@ use crate::{
 
 use super::ProjectResolver;
 
+/// Represents a project and its components.
+/// A Project is typically a repository with a package.json file.
 pub struct Project {
     project_root: PathBuf,
     project_name: String,
@@ -23,6 +25,13 @@ pub struct Project {
 }
 
 impl Project {
+    /// Creates a new Project instance from a given path.
+    /// The path is expected to be the root of the project and should be a directory.
+    ///
+    /// # Panics
+    ///
+    /// - If the project root does not exist.
+    /// - If the project root is a file.
     pub fn new(project_root: PathBuf) -> Self {
         if !project_root.exists() {
             panic!("Project root does not exist");
@@ -34,9 +43,11 @@ impl Project {
 
         let package_json = PackageJson::read(project_root.join("package.json"))
             .expect("Failed to read package.json");
-        let project_name = package_json
-            .name
-            .expect("No project name found in package.json");
+
+        let project_name = package_json.name.unwrap_or_else(|| {
+            Logger::warn(&format!("No project name found in package.json"));
+            project_root.to_string_lossy().to_string()
+        });
 
         let tsconfig_path = project_root.join("tsconfig.json");
         let resolver = if tsconfig_path.exists() {
@@ -53,14 +64,23 @@ impl Project {
         }
     }
 
+    /// Traverses the project and tries to find components.
+    ///
+    /// # Arguments
+    ///
+    /// - `exclude`: A list of patterns to exclude from the traversal.
+    /// - `include`: A list of patterns to include in the traversal.
     pub fn traverse(&mut self, exclude: &[String], include: &[String]) {
         Logger::info(&format!(
             "Starting traversal of project: {}",
-            self.project_root.display()
+            self.project_name
         ));
+
         let walker = self.build_walker(exclude, include);
+        // we have to use a RwLock here because we are traversing the project in parallel
         let project = RwLock::new(self);
 
+        // starting the traversal
         walker.run(|| {
             Box::new(|result: Result<DirEntry, Error>| {
                 match result {
@@ -80,6 +100,12 @@ impl Project {
         });
     }
 
+    /// Builds a walker with correct overrides and patterns.
+    ///
+    /// # Arguments
+    ///
+    /// - `exclude`: A list of patterns to exclude from the traversal.
+    /// - `include`: A list of patterns to include in the traversal.
     fn build_walker(&self, exclude: &[String], include: &[String]) -> WalkParallel {
         let exclude_patterns: Vec<String> = exclude
             .iter()
@@ -105,67 +131,71 @@ impl Project {
             .build_parallel()
     }
 
+    /// Analyzes a file and adds the found components to the component graph.
     fn analyze_file(&mut self, path: &Path) {
-        if path.extension().unwrap() == "tsx" || path.extension().unwrap() == "ts" {
-            let allocator = Allocator::default();
-            let path_buf = PathBuf::from(path);
-            let source_code = fs::read_to_string(&path_buf).unwrap();
+        // if a file has no extension, we skip it
+        let extension = if let Some(ext) = path.extension() {
+            ext.to_string_lossy().to_string()
+        } else {
+            return;
+        };
 
-            Logger::debug(&format!("Parsing file: {}", path.display()), 2);
-            let result = parse_tsx(&allocator, &path_buf, &source_code);
+        // currently we only support tsx and ts files
+        if extension != "tsx" && extension != "ts" {
+            return;
+        }
 
-            if result.is_err() {
-                Logger::error(&format!("Failed to parse file: {}", path.display()));
-                return;
-            }
+        let allocator = Allocator::default();
+        let path_buf = PathBuf::from(path);
+        let source_code = fs::read_to_string(&path_buf).unwrap();
 
-            let (_parser_ret, semantic_ret) = result.unwrap();
+        Logger::debug(&format!("Parsing file: {}", path.display()), 2);
+        let result = parse_tsx(&allocator, &path_buf, &source_code);
 
-            let react_analyzer =
-                ReactAnalyzer::new(&semantic_ret.semantic, path_buf, &self.resolver);
-            let components = react_analyzer.analyze();
+        if result.is_err() {
+            Logger::error(&format!("Failed to parse file: {}", path.display()));
+            return;
+        }
 
-            for component in components {
-                let path_relative = replace_absolute_path_with_project_name(
-                    self.project_root.clone(),
-                    component.file_path.clone(),
-                    &self.project_name,
-                );
-                self.component_graph
-                    .add_component(component.name, path_relative);
-            }
+        let (_parser_ret, semantic_ret) = result.unwrap();
+
+        let react_analyzer = ReactAnalyzer::new(&semantic_ret.semantic, path_buf, &self.resolver);
+        let components = react_analyzer.analyze();
+
+        for component in components {
+            let path_relative = replace_absolute_path_with_project_name(
+                self.project_root.clone(),
+                component.file_path.clone(),
+                &self.project_name,
+            );
+            self.component_graph
+                .add_component(component.name, path_relative);
         }
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use tempfile::TempDir;
+    use crate::util::test_utils;
 
     use super::*;
 
     #[test]
     fn test_project() {
-        Logger::set_level(2);
-        let temp_dir = TempDir::new().unwrap();
-        let project_root = temp_dir.path().to_path_buf();
+        let temp_dir = test_utils::create_mock_project(&vec![
+            ("package.json", r#"{"name": "test"}"#),
+            ("tsconfig.json", "{}"),
+            (
+                "src/index.tsx",
+                r#"
+                    import React from 'react';
 
-        let src_dir = project_root.join("src");
-        fs::create_dir_all(&src_dir).unwrap();
+                    const App: React.FC = () => { return <div>Hello World</div>; }
+                "#,
+            ),
+        ]);
 
-        fs::write(project_root.join("package.json"), "{\"name\": \"test\"}").unwrap();
-        fs::write(project_root.join("tsconfig.json"), "{}").unwrap();
-        fs::write(
-            src_dir.join("index.tsx"),
-            r#"
-            import React from 'react';
-
-            const App: React.FC = () => { return <div>Hello World</div>; }
-        "#,
-        )
-        .unwrap();
-
-        let mut project = Project::new(project_root);
+        let mut project = Project::new(temp_dir.path().to_path_buf());
         project.traverse(&[], &["**/*.tsx".to_string(), "**/*.ts".to_string()]);
 
         assert_eq!(project.component_graph.graph.node_count(), 1);

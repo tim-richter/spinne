@@ -140,183 +140,187 @@ impl ComponentGraph {
     }
 }
 
-#[test]
-fn test_new() {
-    let graph = ComponentGraph::new();
-    assert_eq!(graph.graph.node_count(), 0);
-    assert_eq!(graph.graph.edge_count(), 0);
-}
+#[cfg(test)]
+mod tests {
+    use super::*;
 
-#[test]
-fn test_add_component() {
-    let mut graph = ComponentGraph::new();
-    let file_path = PathBuf::from("/path/to/Component.tsx");
-    let key = "MyComponent".to_string();
+    #[test]
+    fn test_new() {
+        let graph = ComponentGraph::new();
+        assert_eq!(graph.graph.node_count(), 0);
+        assert_eq!(graph.graph.edge_count(), 0);
+    }
 
-    let node_index = graph.add_component(key.clone(), file_path.clone());
+    #[test]
+    fn test_add_component() {
+        let mut graph = ComponentGraph::new();
+        let file_path = PathBuf::from("/path/to/Component.tsx");
+        let key = "MyComponent".to_string();
 
-    assert_eq!(graph.graph.node_count(), 1);
-    assert_eq!(graph.graph.edge_count(), 0);
-    assert!(graph.has_component(&key, &file_path));
-    assert_eq!(graph.graph[node_index].name, key);
-    assert_eq!(graph.graph[node_index].file_path, file_path);
-}
+        let node_index = graph.add_component(key.clone(), file_path.clone());
 
-#[test]
-fn test_add_duplicate_component() {
-    let mut graph = ComponentGraph::new();
-    let file_path = PathBuf::from("/path/to/Component.tsx");
-    let key = "MyComponent".to_string();
+        assert_eq!(graph.graph.node_count(), 1);
+        assert_eq!(graph.graph.edge_count(), 0);
+        assert!(graph.has_component(&key, &file_path));
+        assert_eq!(graph.graph[node_index].name, key);
+        assert_eq!(graph.graph[node_index].file_path, file_path);
+    }
 
-    let node_index = graph.add_component(key.clone(), file_path.clone());
-    let second_node_index = graph.add_component(key.clone(), file_path.clone());
+    #[test]
+    fn test_add_duplicate_component() {
+        let mut graph = ComponentGraph::new();
+        let file_path = PathBuf::from("/path/to/Component.tsx");
+        let key = "MyComponent".to_string();
 
-    assert_eq!(graph.graph.node_count(), 1);
-    assert_eq!(graph.graph.edge_count(), 0);
-    assert!(graph.has_component(&key, &file_path));
-    assert_eq!(second_node_index, node_index);
-}
+        let node_index = graph.add_component(key.clone(), file_path.clone());
+        let second_node_index = graph.add_component(key.clone(), file_path.clone());
 
-#[test]
-fn test_add_child() {
-    let mut graph = ComponentGraph::new();
-    let parent_key = "ParentComponent".to_string();
-    let child_key = "ChildComponent".to_string();
+        assert_eq!(graph.graph.node_count(), 1);
+        assert_eq!(graph.graph.edge_count(), 0);
+        assert!(graph.has_component(&key, &file_path));
+        assert_eq!(second_node_index, node_index);
+    }
 
-    let parent_node_index = graph.add_component(
-        parent_key.clone(),
-        PathBuf::from("/path/to/ParentComponent.tsx"),
-    );
-    let child_node_index = graph.add_component(
-        child_key.clone(),
-        PathBuf::from("/path/to/ChildComponent.tsx"),
-    );
+    #[test]
+    fn test_add_child() {
+        let mut graph = ComponentGraph::new();
+        let parent_key = "ParentComponent".to_string();
+        let child_key = "ChildComponent".to_string();
 
-    graph.add_child(
-        (&parent_key, &PathBuf::from("/path/to/ParentComponent.tsx")),
-        (&child_key, &PathBuf::from("/path/to/ChildComponent.tsx")),
-    );
+        let parent_node_index = graph.add_component(
+            parent_key.clone(),
+            PathBuf::from("/path/to/ParentComponent.tsx"),
+        );
+        let child_node_index = graph.add_component(
+            child_key.clone(),
+            PathBuf::from("/path/to/ChildComponent.tsx"),
+        );
 
-    assert_eq!(graph.graph.node_count(), 2);
-    assert_eq!(graph.graph.edge_count(), 1);
-    assert!(graph.has_component(&parent_key, &PathBuf::from("/path/to/ParentComponent.tsx")));
-    assert!(graph.has_component(&child_key, &PathBuf::from("/path/to/ChildComponent.tsx")));
-    assert!(graph
-        .graph
-        .contains_edge(parent_node_index, child_node_index));
-}
+        graph.add_child(
+            (&parent_key, &PathBuf::from("/path/to/ParentComponent.tsx")),
+            (&child_key, &PathBuf::from("/path/to/ChildComponent.tsx")),
+        );
 
-#[test]
-fn test_complex_graph_structure() {
-    let mut graph = ComponentGraph::new();
+        assert_eq!(graph.graph.node_count(), 2);
+        assert_eq!(graph.graph.edge_count(), 1);
+        assert!(graph.has_component(&parent_key, &PathBuf::from("/path/to/ParentComponent.tsx")));
+        assert!(graph.has_component(&child_key, &PathBuf::from("/path/to/ChildComponent.tsx")));
+        assert!(graph
+            .graph
+            .contains_edge(parent_node_index, child_node_index));
+    }
 
-    // Add components
-    let app_path = PathBuf::from("/path/to/App.tsx");
-    let app = graph.add_component("App".to_string(), app_path.clone());
-    let header = graph.add_component("Header".to_string(), PathBuf::from("/path/to/Header.tsx"));
+    #[test]
+    fn test_complex_graph_structure() {
+        let mut graph = ComponentGraph::new();
 
-    let footer = graph.add_component("Footer".to_string(), PathBuf::from("/path/to/Footer.tsx"));
-    let content = graph.add_component("Content".to_string(), PathBuf::from("/path/to/Content.tsx"));
+        // Add components
+        let app_path = PathBuf::from("/path/to/App.tsx");
+        let app = graph.add_component("App".to_string(), app_path.clone());
+        let header =
+            graph.add_component("Header".to_string(), PathBuf::from("/path/to/Header.tsx"));
 
-    // Add relationships
-    graph.add_child(
-        ("App", &app_path),
-        ("Header", &PathBuf::from("/path/to/Header.tsx")),
-    );
-    graph.add_child(
-        ("App", &app_path),
-        ("Footer", &PathBuf::from("/path/to/Footer.tsx")),
-    );
-    graph.add_child(
-        ("App", &app_path),
-        ("Content", &PathBuf::from("/path/to/Content.tsx")),
-    );
+        let footer =
+            graph.add_component("Footer".to_string(), PathBuf::from("/path/to/Footer.tsx"));
+        let content =
+            graph.add_component("Content".to_string(), PathBuf::from("/path/to/Content.tsx"));
 
-    // Assertions
-    assert_eq!(graph.graph.node_count(), 4);
-    assert_eq!(graph.graph.edge_count(), 3);
+        // Add relationships
+        graph.add_child(
+            ("App", &app_path),
+            ("Header", &PathBuf::from("/path/to/Header.tsx")),
+        );
+        graph.add_child(
+            ("App", &app_path),
+            ("Footer", &PathBuf::from("/path/to/Footer.tsx")),
+        );
+        graph.add_child(
+            ("App", &app_path),
+            ("Content", &PathBuf::from("/path/to/Content.tsx")),
+        );
 
-    let app_component = &graph.graph[app];
-    assert_eq!(app_component.name, "App");
-    assert_eq!(app_component.file_path, app_path);
+        // Assertions
+        assert_eq!(graph.graph.node_count(), 4);
+        assert_eq!(graph.graph.edge_count(), 3);
 
-    let header_component = &graph.graph[header];
-    assert_eq!(header_component.name, "Header");
-    assert_eq!(
-        header_component.file_path,
-        PathBuf::from("/path/to/Header.tsx")
-    );
+        let app_component = &graph.graph[app];
+        assert_eq!(app_component.name, "App");
+        assert_eq!(app_component.file_path, app_path);
 
-    let footer_component = &graph.graph[footer];
-    assert_eq!(footer_component.name, "Footer");
-    assert_eq!(
-        footer_component.file_path,
-        PathBuf::from("/path/to/Footer.tsx")
-    );
+        let header_component = &graph.graph[header];
+        assert_eq!(header_component.name, "Header");
+        assert_eq!(
+            header_component.file_path,
+            PathBuf::from("/path/to/Header.tsx")
+        );
 
-    let content_component = &graph.graph[content];
-    assert_eq!(content_component.name, "Content");
-    assert_eq!(
-        content_component.file_path,
-        PathBuf::from("/path/to/Content.tsx")
-    );
+        let footer_component = &graph.graph[footer];
+        assert_eq!(footer_component.name, "Footer");
+        assert_eq!(
+            footer_component.file_path,
+            PathBuf::from("/path/to/Footer.tsx")
+        );
 
-    assert!(graph.graph.contains_edge(app, header));
-    assert!(graph.graph.contains_edge(app, footer));
-    assert!(graph.graph.contains_edge(app, content));
+        let content_component = &graph.graph[content];
+        assert_eq!(content_component.name, "Content");
+        assert_eq!(
+            content_component.file_path,
+            PathBuf::from("/path/to/Content.tsx")
+        );
 
-    graph.print_graph();
-}
+        assert!(graph.graph.contains_edge(app, header));
+        assert!(graph.graph.contains_edge(app, footer));
+        assert!(graph.graph.contains_edge(app, content));
+    }
 
-#[test]
-fn test_cyclic_dependency() {
-    let mut graph = ComponentGraph::new();
+    #[test]
+    fn test_cyclic_dependency() {
+        let mut graph = ComponentGraph::new();
 
-    let component_a = graph.add_component(
-        "ComponentA".to_string(),
-        PathBuf::from("/path/to/ComponentA.tsx"),
-    );
-    let component_b = graph.add_component(
-        "ComponentB".to_string(),
-        PathBuf::from("/path/to/ComponentB.tsx"),
-    );
+        let component_a = graph.add_component(
+            "ComponentA".to_string(),
+            PathBuf::from("/path/to/ComponentA.tsx"),
+        );
+        let component_b = graph.add_component(
+            "ComponentB".to_string(),
+            PathBuf::from("/path/to/ComponentB.tsx"),
+        );
 
-    graph.add_child(
-        ("ComponentA", &PathBuf::from("/path/to/ComponentA.tsx")),
-        ("ComponentB", &PathBuf::from("/path/to/ComponentB.tsx")),
-    );
-    graph.add_child(
-        ("ComponentB", &PathBuf::from("/path/to/ComponentB.tsx")),
-        ("ComponentA", &PathBuf::from("/path/to/ComponentA.tsx")),
-    );
+        graph.add_child(
+            ("ComponentA", &PathBuf::from("/path/to/ComponentA.tsx")),
+            ("ComponentB", &PathBuf::from("/path/to/ComponentB.tsx")),
+        );
+        graph.add_child(
+            ("ComponentB", &PathBuf::from("/path/to/ComponentB.tsx")),
+            ("ComponentA", &PathBuf::from("/path/to/ComponentA.tsx")),
+        );
 
-    assert_eq!(graph.graph.node_count(), 2);
+        assert_eq!(graph.graph.node_count(), 2);
 
-    assert_eq!(graph.graph.edge_count(), 2);
-    assert!(graph.graph.contains_edge(component_a, component_b));
-    assert!(graph.graph.contains_edge(component_b, component_a));
-}
+        assert_eq!(graph.graph.edge_count(), 2);
+        assert!(graph.graph.contains_edge(component_a, component_b));
+        assert!(graph.graph.contains_edge(component_b, component_a));
+    }
 
-#[test]
-fn test_to_serializable() {
-    let mut graph = ComponentGraph::new();
-    graph.add_component(
-        "ComponentA".to_string(),
-        PathBuf::from("/path/to/ComponentA.tsx"),
-    );
-    graph.add_component(
-        "ComponentB".to_string(),
-        PathBuf::from("/path/to/ComponentB.tsx"),
-    );
+    #[test]
+    fn test_to_serializable() {
+        let mut graph = ComponentGraph::new();
+        graph.add_component(
+            "ComponentA".to_string(),
+            PathBuf::from("/path/to/ComponentA.tsx"),
+        );
+        graph.add_component(
+            "ComponentB".to_string(),
+            PathBuf::from("/path/to/ComponentB.tsx"),
+        );
 
-    graph.add_child(
-        ("ComponentA", &PathBuf::from("/path/to/ComponentA.tsx")),
-        ("ComponentB", &PathBuf::from("/path/to/ComponentB.tsx")),
-    );
+        graph.add_child(
+            ("ComponentA", &PathBuf::from("/path/to/ComponentA.tsx")),
+            ("ComponentB", &PathBuf::from("/path/to/ComponentB.tsx")),
+        );
 
-    let serializable = graph.to_serializable();
-    let json = serde_json::to_string_pretty(&serializable).unwrap();
-    println!("{}", json);
-    assert_eq!(serializable.nodes.len(), 2);
-    assert_eq!(serializable.edges.len(), 1);
+        let serializable = graph.to_serializable();
+        assert_eq!(serializable.nodes.len(), 2);
+        assert_eq!(serializable.edges.len(), 1);
+    }
 }

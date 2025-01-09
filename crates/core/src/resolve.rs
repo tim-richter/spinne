@@ -10,14 +10,14 @@ use oxc_resolver::{Resolution, ResolveOptions, Resolver, TsconfigOptions, Tsconf
 ///
 /// # Example
 ///
-/// ```
+/// ```no_run
 /// use std::path::PathBuf;
 /// use spinne_core::resolve_file_path;
 ///
 /// let dir = PathBuf::from("/Users/tim/projects/spinne/src/index.ts");
 /// let specifier = "./components/Button";
 /// let tsconfig = PathBuf::from("/Users/tim/projects/spinne/tsconfig.json");
-/// let resolution = resolve_file_path(&dir, &specifier, &tsconfig);
+/// let resolution = resolve_file_path(&dir, &specifier, Some(&tsconfig));
 /// assert!(resolution.is_ok());
 /// ```
 pub fn resolve_file_path(

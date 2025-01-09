@@ -27,16 +27,16 @@ impl<'a> ReactAnalyzer<'a> {
     }
 
     pub fn analyze(&self) -> Vec<Component> {
-        let root_components = extract_components(&self.semantic, &self.resolver);
+        let root_components =
+            extract_components(&self.semantic, &self.resolver, self.file_path.clone());
         let mut components = Vec::new();
 
         for component in root_components {
-            Logger::debug(&format!("Found root component: {}", component.name), 1);
             let component = Component::new(
                 component.name.to_string(),
                 self.file_path.clone(),
                 HashMap::new(),
-                vec![],
+                component.children,
             );
             components.push(component);
         }
@@ -51,6 +51,8 @@ mod tests {
     use oxc_parser::Parser;
     use oxc_semantic::{SemanticBuilder, SemanticBuilderReturn};
     use oxc_span::SourceType;
+
+    use crate::util::test_utils;
 
     use super::*;
 
@@ -68,19 +70,37 @@ mod tests {
 
     #[test]
     fn test_analyze() {
-        let content = r#"
+        Logger::set_level(3);
+        let files = vec![
+            (
+                "src/index.tsx",
+                r#"
             import React from 'react';
-            import { Button } from './components/Button';
+            import { Button } from './Button';
 
             const App: React.FC = () => {
                 return <Button />;
             }
-        "#;
+        "#,
+            ),
+            (
+                "src/Button.tsx",
+                r#"
+            import React from 'react';
+
+            export const Button: React.FC = () => {
+                return <div>Button</div>;
+            }
+            "#,
+            ),
+        ];
+
+        let temp_dir = test_utils::create_mock_project(&files);
 
         let allocator = Allocator::default();
-        let semantic = setup_semantic(&allocator, content);
+        let semantic = setup_semantic(&allocator, files[0].1);
 
-        let file_path = PathBuf::from("test/src/index.tsx");
+        let file_path = PathBuf::from(temp_dir.path().join(files[0].0));
         let resolver = ProjectResolver::new(None);
         let analyzer = ReactAnalyzer::new(&semantic.semantic, file_path, &resolver);
 
