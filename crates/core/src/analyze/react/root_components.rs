@@ -3,11 +3,11 @@ use std::{collections::HashMap, path::PathBuf};
 use oxc_ast::{
     ast::{
         Expression, FunctionBody, JSXAttributeItem, JSXAttributeName, JSXElementName,
-        JSXOpeningElement, TSType, TSTypeName,
+        JSXOpeningElement, Statement, TSType, TSTypeAnnotation, TSTypeName,
     },
     AstKind, Visit,
 };
-use oxc_semantic::Semantic;
+use oxc_semantic::{AstNode, Semantic};
 use spinne_logger::Logger;
 
 use crate::{
@@ -18,35 +18,179 @@ use crate::{
 
 use super::{find_component_root, find_import::find_import_for_symbol};
 
+/// Check if the identifier is in pascal case
 fn has_correct_case(identifier: &str) -> bool {
     util::is_pascal_case(&identifier.to_string())
 }
 
-fn has_react_type_annotation(type_annotation: &TSType) -> bool {
-    if let TSType::TSTypeReference(type_reference) = type_annotation {
-        let type_name = &type_reference.type_name;
+/// Check if the function body has a return statement that matches the react return type
+/// This could be a JSXElement, JSXFragment, NullLiteral etc.
+fn has_react_return(body: &FunctionBody) -> bool {
+    body.statements.iter().any(|node| match node {
+        Statement::ReturnStatement(return_statement) => {
+            if let Some(argument) = &return_statement.argument {
+                match argument {
+                    Expression::JSXElement(_) => {
+                        return true;
+                    }
+                    Expression::JSXFragment(_) => {
+                        return true;
+                    }
+                    Expression::NullLiteral(_) => {
+                        return true;
+                    }
+                    Expression::BooleanLiteral(_) => {
+                        return true;
+                    }
+                    Expression::StringLiteral(_) => {
+                        return true;
+                    }
+                    Expression::NumericLiteral(_) => {
+                        return true;
+                    }
+                    _ => {}
+                }
+            }
 
-        // React.FC
-        if let TSTypeName::QualifiedName(qualified_name) = type_name {
-            let left = &qualified_name.left;
-            let right = &qualified_name.right;
+            return false;
+        }
+        _ => false,
+    })
+}
 
-            if let TSTypeName::IdentifierReference(identifier_reference) = left {
+/// Check if the type annotation is a react type annotation e.g. React.FC
+fn has_react_type_annotation(
+    type_annotation: &Option<oxc_allocator::Box<TSTypeAnnotation>>,
+) -> bool {
+    if let Some(type_annotation) = type_annotation {
+        if let TSType::TSTypeReference(type_reference) = &type_annotation.type_annotation {
+            let type_name = &type_reference.type_name;
+
+            // React.FC
+            if let TSTypeName::QualifiedName(qualified_name) = type_name {
+                let left = &qualified_name.left;
+                let right = &qualified_name.right;
+
+                if let TSTypeName::IdentifierReference(identifier_reference) = left {
+                    let ident_ref = &identifier_reference.name;
+
+                    return ident_ref == "React" && right.name == "FC";
+                }
+            }
+
+            // FC
+            if let TSTypeName::IdentifierReference(identifier_reference) = type_name {
                 let ident_ref = &identifier_reference.name;
 
-                return ident_ref == "React" && right.name == "FC";
+                return ident_ref == "FC";
             }
-        }
-
-        // FC
-        if let TSTypeName::IdentifierReference(identifier_reference) = type_name {
-            let ident_ref = &identifier_reference.name;
-
-            return ident_ref == "FC";
         }
     }
 
     false
+}
+
+/// Check if the node is a react component
+fn is_react_component(node: &AstNode) -> bool {
+    match node.kind() {
+        AstKind::Function(fn_decl) => {
+            todo!()
+        }
+        AstKind::VariableDeclaration(var_decl) => {
+            let name = var_decl.declarations.first();
+
+            if let Some(name) = name {
+                let id = &name.id;
+                let identifier = id.get_identifier();
+                let type_annotation = &id.type_annotation;
+
+                let identifier = match identifier {
+                    Some(identifier) => identifier,
+                    None => return false,
+                };
+
+                Logger::debug(
+                    &format!("Analyzing variable declaration: {}", identifier),
+                    3,
+                );
+
+                if !has_correct_case(&identifier.to_string()) {
+                    return false;
+                }
+
+                if has_react_type_annotation(type_annotation) {
+                    return true;
+                }
+
+                if let Some(init) = &name.init {
+                    if let Expression::ArrowFunctionExpression(arrow_fn_expr) = init {
+                        let body = &arrow_fn_expr.body;
+                        if has_react_return(body) {
+                            return true;
+                        }
+                    }
+                }
+            }
+
+            return false;
+        }
+        _ => false,
+    }
+}
+
+/// Get the name of the react component
+fn get_component_name(node: &AstNode) -> Option<String> {
+    match node.kind() {
+        AstKind::VariableDeclaration(var_decl) => {
+            let name = var_decl.declarations.first();
+            if let Some(name) = name {
+                let identifier = name.id.get_identifier();
+
+                if let Some(identifier) = identifier {
+                    return Some(identifier.to_string());
+                }
+            }
+        }
+        _ => {}
+    }
+
+    None
+}
+
+fn get_children<'a>(
+    node: &'a AstNode<'a>,
+    semantic: &'a Semantic<'a>,
+    resolver: &'a ProjectResolver,
+    file_path: PathBuf,
+) -> Vec<ComponentChild> {
+    match node.kind() {
+        AstKind::VariableDeclaration(var_decl) => {
+            let name = var_decl.declarations.first();
+
+            if let Some(name) = name {
+                if let Some(init) = &name.init {
+                    match init {
+                        Expression::ArrowFunctionExpression(arrow_fn_expr) => {
+                            let body = &arrow_fn_expr.body;
+
+                            let child_components = traverse_body(
+                                semantic,
+                                body,
+                                resolver,
+                                file_path.parent().unwrap().to_path_buf(),
+                            );
+
+                            return child_components;
+                        }
+                        _ => {}
+                    }
+                }
+            }
+        }
+        _ => {}
+    }
+
+    Vec::new()
 }
 
 /// find react components in ast with oxc
@@ -58,77 +202,17 @@ pub fn extract_components<'a>(
     let mut components: Vec<ComponentRoot> = Vec::new();
 
     for node in semantic.nodes().iter() {
-        match node.kind() {
-            AstKind::Function(fn_decl) => {
-                match fn_decl.name() {
-                    Some(name) => name,
-                    None => continue,
-                };
-                // TODO: check if the function is a react component
-            }
-            AstKind::VariableDeclaration(var_decl) => {
-                let name = var_decl.declarations.first();
+        if is_react_component(node) {
+            let name = get_component_name(node);
+            let children = get_children(node, semantic, resolver, file_path.clone());
 
-                if let Some(name) = name {
-                    let id = &name.id;
-                    let identifier = id.get_identifier();
-                    let type_annotation = &id.type_annotation;
+            let component = ComponentRoot {
+                name: name.unwrap(),
+                props: HashMap::new(),
+                children: children,
+            };
 
-                    let init = match &name.init {
-                        Some(init) => init,
-                        None => continue,
-                    };
-
-                    let identifier = match identifier {
-                        Some(identifier) => identifier,
-                        None => continue,
-                    };
-                    Logger::debug(
-                        &format!("Analyzing variable declaration: {}", identifier),
-                        3,
-                    );
-
-                    let type_annotation = type_annotation.as_ref();
-
-                    if let Some(type_annotation) = type_annotation {
-                        if has_react_type_annotation(&type_annotation.type_annotation)
-                            && has_correct_case(&identifier.to_string())
-                        {
-                            let mut component = ComponentRoot {
-                                name: identifier.to_string(),
-                                props: HashMap::new(),
-                                children: Vec::new(),
-                            };
-
-                            if init.is_function() {
-                                match init {
-                                    Expression::FunctionExpression(fn_expr) => {
-                                        println!("fn_expr: {:?}", fn_expr);
-                                    }
-                                    Expression::ArrowFunctionExpression(arrow_fn_expr) => {
-                                        let body = &arrow_fn_expr.body;
-                                        println!("file_path: {}", file_path.display());
-
-                                        let child_components = get_child_components(
-                                            semantic,
-                                            body,
-                                            resolver,
-                                            file_path.parent().unwrap().to_path_buf(),
-                                        );
-                                        component.children = child_components;
-                                    }
-                                    _ => {}
-                                }
-                            }
-
-                            components.push(component);
-                        }
-                    } else {
-                        Logger::debug("type_annotation is None", 2);
-                    }
-                }
-            }
-            _ => {}
+            components.push(component);
         }
     }
 
@@ -215,7 +299,7 @@ impl<'a> Visit<'a> for ReturnVisitor<'a> {
     }
 }
 
-pub fn get_child_components<'a>(
+pub fn traverse_body<'a>(
     semantic: &'a Semantic<'a>,
     body: &'a FunctionBody<'a>,
     resolver: &'a ProjectResolver,
@@ -300,6 +384,48 @@ mod tests {
                 import React from 'react';
 
                 export const Input: React.FC = () => {
+                    return <input />;
+                }
+            "#,
+            ),
+        ];
+        let temp_dir = create_mock_project(&files);
+
+        let allocator = Allocator::default();
+        let semantic = setup_semantic(&allocator, &files[0].1);
+        let components = extract_components(
+            &semantic.semantic,
+            &ProjectResolver::new(None),
+            PathBuf::from(temp_dir.path().join("src/components/Button.tsx")),
+        );
+
+        assert_eq!(components[0].name, "Button");
+        assert_eq!(components[0].children[0].name, "Input");
+        assert_eq!(
+            components[0].children[0].origin_file_path,
+            PathBuf::from(temp_dir.path().join("src/components/Input.tsx"))
+        );
+        assert_eq!(components[0].children[0].props.len(), 1);
+        assert_eq!(components[0].children[0].props.get("placeholder"), Some(&1));
+    }
+
+    #[test]
+    fn test_find_components_without_type_annotations() {
+        let files = vec![
+            (
+                "src/components/Button.tsx",
+                r#"
+                import { Input } from './Input';
+
+                const Button = () => {
+                  return <Input placeholder="Hello" />;
+                }
+            "#,
+            ),
+            (
+                "src/components/Input.tsx",
+                r#"
+                export const Input = () => {
                     return <input />;
                 }
             "#,

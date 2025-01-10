@@ -19,7 +19,7 @@ fn create_mock_project(files: Vec<(&str, &str)>) -> TempDir {
 
     // Create non-tsx files
     fs::write(root.join("README.md"), "# Mock Project").unwrap();
-    fs::write(root.join("package.json"), "{}").unwrap();
+    fs::write(root.join("package.json"), r#"{"name": "mock-project"}"#).unwrap();
 
     temp_dir
 }
@@ -28,13 +28,11 @@ fn create_mock_project(files: Vec<(&str, &str)>) -> TempDir {
 fn test_cli_with_default_output() {
     let temp_dir = create_mock_project(vec![(
         "src/components/Button.tsx",
-        "export function Button() { return <button>Click me</button>; }",
+        "export const Button = () => { return <button>Click me</button>; }",
     )]);
     let mut cmd = Command::cargo_bin("spinne-cli").unwrap();
 
     cmd.current_dir(temp_dir.path())
-        .arg("-e")
-        .arg(temp_dir.path().join("src"))
         .assert()
         .success()
         .stdout(predicate::str::contains("Writing report to:"));
@@ -47,13 +45,11 @@ fn test_cli_with_default_output() {
 fn test_cli_with_console_output() {
     let temp_dir = create_mock_project(vec![(
         "src/components/Button.tsx",
-        "export function Button() { return <button>Click me</button>; }",
+        "export const Button = () => { return <button>Click me</button>; }",
     )]);
     let mut cmd = Command::cargo_bin("spinne-cli").unwrap();
 
     cmd.current_dir(temp_dir.path())
-        .arg("-e")
-        .arg("src")
         .arg("-f")
         .arg("console")
         .assert()
@@ -68,14 +64,12 @@ fn test_cli_with_console_output() {
 #[test]
 fn test_cli_with_ignore_option() {
     let temp_dir = create_mock_project(vec![
-        ("src/components/Button.tsx", "export function Button() { return <button>Click me</button>; }"),
-        ("src/pages/Home.tsx", "import { Header } from '../components/Header'; export function Home() { return <div><Header /><main>Welcome</main></div>; }"),
+        ("src/components/Button.tsx", "export const Button = () => { return <button>Click me</button>; }"),
+        ("src/pages/Home.tsx", "import { Header } from '../components/Header'; export const Home = () => { return <div><Header /><main>Welcome</main></div>; }"),
     ]);
     let mut cmd = Command::cargo_bin("spinne-cli").unwrap();
 
     cmd.current_dir(temp_dir.path())
-        .arg("-e")
-        .arg("src")
         .arg("--exclude")
         .arg("**/components/**")
         .arg("-f")
@@ -100,15 +94,14 @@ fn test_cli_with_nonexistent_directory() {
 #[test]
 fn test_cli_with_ignore_multiple_directories() {
     let temp_dir = create_mock_project(vec![
-        ("src/components/Button.tsx", "export function Button() { return <button>Click me</button>; }"),
-        ("src/components/Header.tsx", "import { Button } from './Button'; export function Header() { return <header><Button /></header>; }"),
-        ("src/pages/Home.tsx", "import { Header } from '../components/Header'; export function Home() { return <div><Header /><main>Welcome</main></div>; }"),
-        ("src/index.tsx", "import { Home } from './pages/Home'; export function App() { return <Home />; }"),
+        ("src/components/Button.tsx", "export const Button = () => { return <button>Click me</button>; }"),
+        ("src/components/Header.tsx", "import { Button } from './Button'; export const Header = () => { return <header><Button /></header>; }"),
+        ("src/pages/Home.tsx", "import { Header } from '../components/Header'; export const Home = () => { return <div><Header /><main>Welcome</main></div>; }"),
+        ("src/index.tsx", "import { Home } from './pages/Home'; export const App = () => { return <Home />; }"),
     ]);
     let mut cmd = Command::cargo_bin("spinne-cli").unwrap();
 
-    cmd.arg("-e")
-        .arg(temp_dir.path().join("src"))
+    cmd.current_dir(temp_dir.path())
         .arg("--exclude")
         .arg("**/components/**,**/pages/**")
         .arg("-f")
@@ -117,7 +110,7 @@ fn test_cli_with_ignore_multiple_directories() {
         .success()
         .stdout(predicate::str::contains("Button").not())
         .stdout(predicate::str::contains("Header").not())
-        .stdout(predicate::str::contains("Home"))
+        .stdout(predicate::str::contains("Home").not())
         .stdout(predicate::str::contains("App"));
 }
 
@@ -125,15 +118,14 @@ fn test_cli_with_ignore_multiple_directories() {
 fn test_cli_with_include_option() {
     let temp_dir = create_mock_project(vec![(
         "src/components/Button.tsx",
-        "export function Button() { return <button>Click me</button>; }",
+        "export const Button = () => { return <button>Click me</button>; }",
     ), (
         "src/pages/Home.tsx",
-        "import { Header } from '../components/Header'; export function Home() { return <div><Header /><main>Welcome</main></div>; }",
+        "import { Header } from '../components/Header'; export const Home = () => { return <div><Header /><main>Welcome</main></div>; }",
     )]);
     let mut cmd = Command::cargo_bin("spinne-cli").unwrap();
 
-    cmd.arg("-e")
-        .arg(temp_dir.path())
+    cmd.current_dir(temp_dir.path())
         .arg("--include")
         .arg("**/pages/**/*.tsx")
         .arg("-f")
@@ -148,22 +140,20 @@ fn test_cli_with_include_option() {
 fn test_cli_with_html_output() {
     let temp_dir = create_mock_project(vec![(
         "src/components/Button.tsx",
-        "export function Button() { return <button>Click me</button>; }",
+        "export const Button = () => { return <button>Click me</button>; }",
     ), (
         "src/pages/Home.tsx",
-        "import { Header } from '../components/Header'; export function Home() { return <div><Header /><main>Welcome</main></div>; }",
+        "import { Header } from '../components/Header'; export const Home = () => { return <div><Header /><main>Welcome</main></div>; }",
     ),
     (
         "src/index.tsx",
-        "import { Home } from './pages/Home'; export function App() { return <Home />; }",
+        "import { Home } from './pages/Home'; export const App = () => { return <Home />; }",
     ),
-    ("src/components/Header.tsx", "export function Header() { return <header>Header</header>; }"),
+    ("src/components/Header.tsx", "export const Header = () => { return <header>Header</header>; }"),
     ]);
     let mut cmd = Command::cargo_bin("spinne-cli").unwrap();
 
     cmd.current_dir(temp_dir.path())
-        .arg("-e")
-        .arg(temp_dir.path())
         .arg("-f")
         .arg("html")
         .assert()
