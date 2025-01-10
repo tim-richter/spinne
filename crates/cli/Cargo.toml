@@ -1,6 +1,6 @@
 [package]
 name = "spinne-cli"
-version = "0.2.1"
+version = "0.2.2"
 description = "spinne is a cli tool that analyzes design system usage for react projects."
 edition = "2021"
 license = "MIT"
@@ -8,7 +8,7 @@ authors = ["Tim Richter <tim@timrichter.dev>"]
 repository = "https://github.com/tim-richter/spinne"
 
 [dependencies]
-spinne-core = { path = "../core" }
+spinne-core = "0.2.1"
 spinne-html = { path = "../html" }
 spinne-logger = { path = "../logger" }
 serde_json = { workspace = true }
