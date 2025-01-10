@@ -1,13 +1,14 @@
 [package]
 name = "spinne-core"
 version = "0.2.1"
+description = "Core logic for spinne"
 edition = "2021"
 license = "MIT"
 authors = ["Tim Richter <tim@timrichter.dev>"]
 repository = "https://github.com/tim-richter/spinne"
 
 [dependencies]
-spinne-logger = { path = "../logger" }
+spinne-logger = "0.2.0"
 petgraph = "0.7.1"
 serde = { workspace = true }
 serde_json = { workspace = true }

@@ -1128,16 +1128,16 @@ checksum = "b7c388c1b5e93756d0c740965c41e8822f866621d41acbdf6336a6a168f8840c"
 
 [[package]]
 name = "spinne-cli"
-version = "0.2.1"
+version = "0.2.2"
 dependencies = [
  "assert_cmd",
  "clap",
  "open",
  "predicates",
  "serde_json",
- "spinne-core",
- "spinne-html",
- "spinne-logger",
+ "spinne-core 0.2.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "spinne-html 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "spinne-logger 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "tempfile",
 ]
 
@@ -1161,13 +1161,45 @@ dependencies = [
  "predicates",
  "serde",
  "serde_json",
- "spinne-logger",
+ "spinne-logger 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "tempfile",
+]
+
+[[package]]
+name = "spinne-core"
+version = "0.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "026e6de0063d4fd35570dc803ddd3d15e6b54cea9facdb1e7e80a9fd77697a9b"
+dependencies = [
+ "glob",
+ "ignore",
+ "itertools 0.14.0",
+ "jsonc-parser",
+ "oxc-miette",
+ "oxc_allocator",
+ "oxc_ast",
+ "oxc_parser",
+ "oxc_resolver",
+ "oxc_semantic",
+ "oxc_span",
+ "petgraph 0.7.1",
+ "serde",
+ "serde_json",
+ "spinne-logger 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
 name = "spinne-html"
 version = "0.2.0"
+dependencies = [
+ "serde_json",
+]
+
+[[package]]
+name = "spinne-html"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bbb2391f44bfe1319aeca725682be0be749774a484330a33948843059e2054ec"
 dependencies = [
  "serde_json",
 ]
@@ -1182,14 +1214,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "spinne-logger"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "44ca7bef38972e4f609b5c893b3a509c7b838fbdb95df621bdb9d617a772487a"
+dependencies = [
+ "colored",
+ "indicatif",
+ "once_cell",
+]
+
+[[package]]
 name = "spinne-tests"
 version = "0.0.0"
 dependencies = [
  "assert_cmd",
  "predicates",
- "spinne-core",
- "spinne-html",
- "spinne-logger",
+ "spinne-core 0.2.1",
+ "spinne-html 0.2.0",
+ "spinne-logger 0.2.0",
  "tempfile",
 ]
 
