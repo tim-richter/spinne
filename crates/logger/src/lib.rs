@@ -69,7 +69,7 @@ impl Logger {
                     println!("{}", msg.magenta());
                 });
             } else {
-                println!("{}", msg.magenta());
+                println!("{} {}", "DEBUG: ".purple().dimmed(), msg.purple().dimmed());
             }
         }
     }
