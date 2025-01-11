@@ -264,4 +264,108 @@ mod tests {
                 .unwrap(),
         ));
     }
+
+    #[test]
+    fn test_component_graph_with_tsconfig() {
+        let temp_dir = test_utils::create_mock_project(&vec![
+            ("package.json", r#"{"name": "test"}"#),
+            (
+                "tsconfig.json",
+                r#"{"compilerOptions": {"baseUrl": ".", "paths": {"@/*": ["src/*"]}}}"#,
+            ),
+            (
+                "src/index.tsx",
+                r#"
+                    import React from 'react';
+                    import { Button } from '@/components/Button';
+
+                    export const App: React.FC = () => { return <div><Button /></div>; }
+                "#,
+            ),
+            (
+                "src/components/Button.tsx",
+                r#"
+                    import React from 'react';
+                    export const Button: React.FC = () => { return <button>Click me</button>; }
+                "#,
+            ),
+        ]);
+
+        let mut project = Project::new(temp_dir.path().to_path_buf());
+        project.traverse(&[], &["**/*.tsx".to_string(), "**/*.ts".to_string()]);
+
+        assert_eq!(project.component_graph.graph.node_count(), 2);
+        assert!(project
+            .component_graph
+            .has_component("App", &PathBuf::from("test/src/index.tsx")));
+        assert!(project
+            .component_graph
+            .has_component("Button", &PathBuf::from("test/src/components/Button.tsx")));
+
+        // App has edge to Button
+        assert!(project.component_graph.has_edge(
+            project
+                .component_graph
+                .get_component("App", &PathBuf::from("test/src/index.tsx"))
+                .unwrap(),
+            project
+                .component_graph
+                .get_component("Button", &PathBuf::from("test/src/components/Button.tsx"))
+                .unwrap(),
+        ));
+    }
+
+    #[test]
+    fn test_component_graph_with_tsconfig_and_tsx() {
+        let temp_dir = test_utils::create_mock_project(&vec![
+            ("package.json", r#"{"name": "test"}"#),
+            (
+                "tsconfig.json",
+                r#"{"compilerOptions": {"baseUrl": ".", "paths": {"@/*": ["src/*"]}}}"#,
+            ),
+            (
+                "src/components/Button/ButtonGroup.tsx",
+                r#"
+                    import React from 'react';
+                    import { Button } from '@/components/Button';
+
+                    export const ButtonGroup: React.FC<React.PropsWithChildren> = ({ children }) => { return <Button>{children}</Button>; }
+                "#,
+            ),
+            (
+                "src/components/Button.tsx",
+                r#"
+                    import React from 'react';
+                    export const Button = () => { return "HI"; }
+                "#,
+            ),
+        ]);
+
+        let mut project = Project::new(temp_dir.path().to_path_buf());
+        project.traverse(&[], &["**/*.tsx".to_string(), "**/*.ts".to_string()]);
+
+        assert_eq!(project.component_graph.graph.node_count(), 2);
+        assert!(project.component_graph.has_component(
+            "ButtonGroup",
+            &PathBuf::from("test/src/components/Button/ButtonGroup.tsx")
+        ));
+        assert!(project
+            .component_graph
+            .has_component("Button", &PathBuf::from("test/src/components/Button.tsx")));
+
+        // ButtonGroup has edge to Button
+        assert!(project.component_graph.has_edge(
+            project
+                .component_graph
+                .get_component(
+                    "ButtonGroup",
+                    &PathBuf::from("test/src/components/Button/ButtonGroup.tsx")
+                )
+                .unwrap(),
+            project
+                .component_graph
+                .get_component("Button", &PathBuf::from("test/src/components/Button.tsx"))
+                .unwrap(),
+        ));
+    }
 }
