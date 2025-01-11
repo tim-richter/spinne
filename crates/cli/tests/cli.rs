@@ -30,7 +30,7 @@ fn test_cli_with_default_output() {
         "src/components/Button.tsx",
         "export const Button = () => { return <button>Click me</button>; }",
     )]);
-    let mut cmd = Command::cargo_bin("spinne-cli").unwrap();
+    let mut cmd = Command::cargo_bin("spinne").unwrap();
 
     cmd.current_dir(temp_dir.path())
         .assert()
@@ -47,7 +47,7 @@ fn test_cli_with_console_output() {
         "src/components/Button.tsx",
         "export const Button = () => { return <button>Click me</button>; }",
     )]);
-    let mut cmd = Command::cargo_bin("spinne-cli").unwrap();
+    let mut cmd = Command::cargo_bin("spinne").unwrap();
 
     cmd.current_dir(temp_dir.path())
         .arg("-f")
@@ -67,7 +67,7 @@ fn test_cli_with_ignore_option() {
         ("src/components/Button.tsx", "export const Button = () => { return <button>Click me</button>; }"),
         ("src/pages/Home.tsx", "import { Header } from '../components/Header'; export const Home = () => { return <div><Header /><main>Welcome</main></div>; }"),
     ]);
-    let mut cmd = Command::cargo_bin("spinne-cli").unwrap();
+    let mut cmd = Command::cargo_bin("spinne").unwrap();
 
     cmd.current_dir(temp_dir.path())
         .arg("--exclude")
@@ -82,7 +82,7 @@ fn test_cli_with_ignore_option() {
 
 #[test]
 fn test_cli_with_nonexistent_directory() {
-    let mut cmd = Command::cargo_bin("spinne-cli").unwrap();
+    let mut cmd = Command::cargo_bin("spinne").unwrap();
 
     cmd.arg("-e")
         .arg("/path/to/nonexistent/directory")
@@ -99,7 +99,7 @@ fn test_cli_with_ignore_multiple_directories() {
         ("src/pages/Home.tsx", "import { Header } from '../components/Header'; export const Home = () => { return <div><Header /><main>Welcome</main></div>; }"),
         ("src/index.tsx", "import { Home } from './pages/Home'; export const App = () => { return <Home />; }"),
     ]);
-    let mut cmd = Command::cargo_bin("spinne-cli").unwrap();
+    let mut cmd = Command::cargo_bin("spinne").unwrap();
 
     cmd.current_dir(temp_dir.path())
         .arg("--exclude")
@@ -123,7 +123,7 @@ fn test_cli_with_include_option() {
         "src/pages/Home.tsx",
         "import { Header } from '../components/Header'; export const Home = () => { return <div><Header /><main>Welcome</main></div>; }",
     )]);
-    let mut cmd = Command::cargo_bin("spinne-cli").unwrap();
+    let mut cmd = Command::cargo_bin("spinne").unwrap();
 
     cmd.current_dir(temp_dir.path())
         .arg("--include")
@@ -151,7 +151,7 @@ fn test_cli_with_html_output() {
     ),
     ("src/components/Header.tsx", "export const Header = () => { return <header>Header</header>; }"),
     ]);
-    let mut cmd = Command::cargo_bin("spinne-cli").unwrap();
+    let mut cmd = Command::cargo_bin("spinne").unwrap();
 
     cmd.current_dir(temp_dir.path())
         .arg("-f")

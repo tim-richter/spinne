@@ -37,6 +37,10 @@ impl ComponentGraph {
             .any(|i| self.graph[i].name == key && self.graph[i].file_path == *file_path)
     }
 
+    pub fn has_edge(&self, from: NodeIndex, to: NodeIndex) -> bool {
+        self.graph.contains_edge(from, to)
+    }
+
     pub fn get_component(&self, key: &str, file_path: &PathBuf) -> Option<NodeIndex> {
         self.graph
             .node_indices()

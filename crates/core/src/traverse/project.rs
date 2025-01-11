@@ -168,8 +168,22 @@ impl Project {
                 component.file_path.clone(),
                 &self.project_name,
             );
+
             self.component_graph
-                .add_component(component.name, path_relative);
+                .add_component(component.name.clone(), path_relative.clone());
+
+            for child in component.children {
+                let child_path_relative = replace_absolute_path_with_project_name(
+                    self.project_root.clone(),
+                    child.origin_file_path.clone(),
+                    &self.project_name,
+                );
+
+                self.component_graph.add_child(
+                    (&component.name, &path_relative),
+                    (&child.name, &child_path_relative),
+                );
+            }
         }
     }
 }
@@ -202,5 +216,52 @@ mod tests {
         assert!(project
             .component_graph
             .has_component("App", &PathBuf::from("test/src/index.tsx")));
+    }
+
+    #[test]
+    fn test_component_graph() {
+        let temp_dir = test_utils::create_mock_project(&vec![
+            ("package.json", r#"{"name": "test"}"#),
+            ("tsconfig.json", "{}"),
+            (
+                "src/index.tsx",
+                r#"
+                    import React from 'react';
+                    import { Button } from './components/Button';
+
+                    export const App: React.FC = () => { return <div><Button /></div>; }
+                "#,
+            ),
+            (
+                "src/components/Button.tsx",
+                r#"
+                    import React from 'react';
+                    export const Button: React.FC = () => { return <button>Click me</button>; }
+                "#,
+            ),
+        ]);
+
+        let mut project = Project::new(temp_dir.path().to_path_buf());
+        project.traverse(&[], &["**/*.tsx".to_string(), "**/*.ts".to_string()]);
+
+        assert_eq!(project.component_graph.graph.node_count(), 2);
+        assert!(project
+            .component_graph
+            .has_component("App", &PathBuf::from("test/src/index.tsx")));
+        assert!(project
+            .component_graph
+            .has_component("Button", &PathBuf::from("test/src/components/Button.tsx")));
+
+        // App has edge to Button
+        assert!(project.component_graph.has_edge(
+            project
+                .component_graph
+                .get_component("App", &PathBuf::from("test/src/index.tsx"))
+                .unwrap(),
+            project
+                .component_graph
+                .get_component("Button", &PathBuf::from("test/src/components/Button.tsx"))
+                .unwrap(),
+        ));
     }
 }
