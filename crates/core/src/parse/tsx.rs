@@ -60,4 +60,14 @@ mod tests {
 
         assert!(result.is_ok());
     }
+
+    #[test]
+    fn test_parse_tsx_with_error() {
+        let allocator = Allocator::default();
+        let file_path = PathBuf::from("test.tsx");
+        let file_content = "const App = im code with errors => <div>Hello, world!</div>;";
+        let result = parse_tsx(&allocator, &file_path, &file_content);
+
+        assert!(result.is_err());
+    }
 }
