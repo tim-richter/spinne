@@ -80,15 +80,13 @@ impl PackageJson {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::env;
     use tempfile::TempDir;
 
     fn setup_test_dir() -> TempDir {
         let temp_dir = TempDir::new().unwrap();
-        env::set_current_dir(&temp_dir).unwrap();
 
         fs::write(
-            "package.json",
+            temp_dir.path().join("package.json"),
             r#"{
                 "name": "test-project",
                 "version": "1.0.0",
