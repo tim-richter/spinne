@@ -1,3 +1,5 @@
+repository = "https://github.com/tim-richter/spinne"
+
 [workspace]
 members = [
   "crates/core",
