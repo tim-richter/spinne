@@ -6,7 +6,7 @@ edition = "2021"
 license = "MIT"
 authors = ["Tim Richter <tim@timrichter.dev>"]
 repository = "https://github.com/tim-richter/spinne"
-readme = "README.md"
+readme = "../README.md"
 
 [dependencies]
 spinne-core = "0.2.1"
