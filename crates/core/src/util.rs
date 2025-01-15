@@ -15,21 +15,26 @@ pub fn reduce_to_node_module_name(path: &str) -> String {
 
 /// Replace an absolute path with a project name.
 /// We prefix the path with the project name and return the new path.
+/// If the path is not absolute, we return the original path because it's probably a node module.
 pub fn replace_absolute_path_with_project_name(
     project_root: PathBuf,
     path: PathBuf,
     prepend_with: &str,
 ) -> PathBuf {
-    let stripped_path = path.strip_prefix(project_root);
+    if path.has_root() {
+        let stripped_path = path.strip_prefix(project_root);
 
-    if let Err(e) = stripped_path {
-        Logger::error(&format!("Error stripping path: {:?}", e));
-        return path;
+        if let Err(e) = stripped_path {
+            Logger::error(&format!("Error stripping path: {:?}", e));
+            return path;
+        }
+
+        let relative_path = stripped_path.unwrap().to_path_buf();
+
+        return PathBuf::from(prepend_with).join(relative_path);
     }
 
-    let relative_path = stripped_path.unwrap().to_path_buf();
-
-    PathBuf::from(prepend_with).join(relative_path)
+    path
 }
 
 #[cfg(test)]
@@ -79,6 +84,18 @@ mod tests {
                 "test-project"
             ),
             PathBuf::from("test-project/src/main.tsx")
+        );
+    }
+
+    #[test]
+    fn test_replace_path_with_relative_path_not_absolute() {
+        assert_eq!(
+            replace_absolute_path_with_project_name(
+                PathBuf::from("/Users/asht/Projects/spinne"),
+                PathBuf::from("src/main.tsx"),
+                "test-project"
+            ),
+            PathBuf::from("src/main.tsx")
         );
     }
 

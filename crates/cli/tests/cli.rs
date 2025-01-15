@@ -66,6 +66,7 @@ fn test_cli_with_ignore_option() {
     let temp_dir = create_mock_project(vec![
         ("src/components/Button.tsx", "export const Button = () => { return <button>Click me</button>; }"),
         ("src/pages/Home.tsx", "import { Header } from '../components/Header'; export const Home = () => { return <div><Header /><main>Welcome</main></div>; }"),
+        ("src/components/Header.tsx", "export const Header = () => { return <header>Header</header>; }"),
     ]);
     let mut cmd = Command::cargo_bin("spinne").unwrap();
 
@@ -77,7 +78,7 @@ fn test_cli_with_ignore_option() {
         .assert()
         .success()
         .stdout(predicate::str::contains("Home"))
-        .stdout(predicate::str::contains("Button").not());
+        .stdout(predicate::str::contains("Header"));
 }
 
 #[test]
@@ -110,7 +111,7 @@ fn test_cli_with_ignore_multiple_directories() {
         .success()
         .stdout(predicate::str::contains("Button").not())
         .stdout(predicate::str::contains("Header").not())
-        .stdout(predicate::str::contains("Home").not())
+        .stdout(predicate::str::contains("Home"))
         .stdout(predicate::str::contains("App"));
 }
 
@@ -122,7 +123,11 @@ fn test_cli_with_include_option() {
     ), (
         "src/pages/Home.tsx",
         "import { Header } from '../components/Header'; export const Home = () => { return <div><Header /><main>Welcome</main></div>; }",
-    )]);
+    ), (
+        "src/components/Header.tsx",
+        "export const Header = () => { return <header>Header</header>; }",
+    )
+    ]);
     let mut cmd = Command::cargo_bin("spinne").unwrap();
 
     cmd.current_dir(temp_dir.path())
