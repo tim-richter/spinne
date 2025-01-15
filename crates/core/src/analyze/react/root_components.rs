@@ -94,7 +94,23 @@ fn has_react_type_annotation(
 fn is_react_component(node: &AstNode) -> bool {
     match node.kind() {
         AstKind::Function(fn_decl) => {
-            todo!()
+            let name = &fn_decl.id;
+
+            Logger::debug(&format!("Analyzing function declaration: {:?}", name), 3);
+
+            if let Some(name) = name {
+                if !has_correct_case(&name.name.to_string()) {
+                    return false;
+                }
+
+                if let Some(body) = &fn_decl.body {
+                    if has_react_return(body) {
+                        return true;
+                    }
+                }
+            }
+
+            return false;
         }
         AstKind::VariableDeclaration(var_decl) => {
             let name = var_decl.declarations.first();
@@ -141,6 +157,13 @@ fn is_react_component(node: &AstNode) -> bool {
 /// Get the name of the react component
 fn get_component_name(node: &AstNode) -> Option<String> {
     match node.kind() {
+        AstKind::Function(fn_decl) => {
+            let name = &fn_decl.id;
+
+            if let Some(name) = name {
+                return Some(name.name.to_string());
+            }
+        }
         AstKind::VariableDeclaration(var_decl) => {
             let name = var_decl.declarations.first();
             if let Some(name) = name {
@@ -185,6 +208,20 @@ fn get_children<'a>(
                         _ => {}
                     }
                 }
+            }
+        }
+        AstKind::Function(fn_decl) => {
+            let body = &fn_decl.body;
+
+            if let Some(body) = body {
+                let child_components = traverse_body(
+                    semantic,
+                    body,
+                    resolver,
+                    file_path.parent().unwrap().to_path_buf(),
+                );
+
+                return child_components;
             }
         }
         _ => {}
@@ -426,6 +463,48 @@ mod tests {
                 "src/components/Input.tsx",
                 r#"
                 export const Input = () => {
+                    return <input />;
+                }
+            "#,
+            ),
+        ];
+        let temp_dir = create_mock_project(&files);
+
+        let allocator = Allocator::default();
+        let semantic = setup_semantic(&allocator, &files[0].1);
+        let components = extract_components(
+            &semantic.semantic,
+            &ProjectResolver::new(None),
+            PathBuf::from(temp_dir.path().join("src/components/Button.tsx")),
+        );
+
+        assert_eq!(components[0].name, "Button");
+        assert_eq!(components[0].children[0].name, "Input");
+        assert_eq!(
+            components[0].children[0].origin_file_path,
+            PathBuf::from(temp_dir.path().join("src/components/Input.tsx"))
+        );
+        assert_eq!(components[0].children[0].props.len(), 1);
+        assert_eq!(components[0].children[0].props.get("placeholder"), Some(&1));
+    }
+
+    #[test]
+    fn test_find_components_with_function_components() {
+        let files = vec![
+            (
+                "src/components/Button.tsx",
+                r#"
+                import { Input } from './Input';
+
+                function Button() {
+                  return <Input placeholder="Hello" />;
+                }
+            "#,
+            ),
+            (
+                "src/components/Input.tsx",
+                r#"
+                export function Input() {
                     return <input />;
                 }
             "#,
