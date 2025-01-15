@@ -529,4 +529,46 @@ mod tests {
         assert_eq!(components[0].children[0].props.len(), 1);
         assert_eq!(components[0].children[0].props.get("placeholder"), Some(&1));
     }
+
+    #[test]
+    fn test_find_components_with_node_modules_imports() {
+        let files = vec![
+            (
+                "src/components/Button.tsx",
+                r#"
+                import { Input } from 'material-ui';
+
+                function Button() {
+                  return <Input placeholder="Hello" />;
+                }
+            "#,
+            ),
+            (
+                "node_modules/material-ui/index.tsx",
+                r#"
+                export function Input() {
+                    return <div>Hello</div>;
+                }
+            "#,
+            ),
+        ];
+        let temp_dir = create_mock_project(&files);
+
+        let allocator = Allocator::default();
+        let semantic = setup_semantic(&allocator, &files[0].1);
+        let components = extract_components(
+            &semantic.semantic,
+            &ProjectResolver::new(None),
+            PathBuf::from(temp_dir.path().join("src/components/Button.tsx")),
+        );
+
+        assert_eq!(components[0].name, "Button");
+        assert_eq!(components[0].children[0].name, "Input");
+        assert_eq!(
+            components[0].children[0].origin_file_path,
+            PathBuf::from("material-ui")
+        );
+        assert_eq!(components[0].children[0].props.len(), 1);
+        assert_eq!(components[0].children[0].props.get("placeholder"), Some(&1));
+    }
 }

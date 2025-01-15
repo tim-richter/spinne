@@ -9,7 +9,7 @@ use oxc_semantic::{NodeId, Semantic, SymbolFlags, SymbolId};
 use oxc_span::Atom;
 use spinne_logger::Logger;
 
-use crate::{parse::parse_tsx, traverse::ProjectResolver};
+use crate::{parse::parse_tsx, traverse::ProjectResolver, util::reduce_to_node_module_name};
 
 use super::find_import::find_import_for_symbol;
 
@@ -84,6 +84,11 @@ fn recursive_find(
     }
 
     let resolved_path = resolved_path.unwrap();
+
+    if resolved_path.path().to_str().unwrap().contains("node_modules") {
+        let node_module_name = reduce_to_node_module_name(resolved_path.path().to_str().unwrap());
+        return Some((node_module_name.to_string(), node_module_name.to_string().into()));
+    }
 
     if resolved_path.path().is_file() {
         let content = std::fs::read_to_string(&resolved_path.path()).unwrap();

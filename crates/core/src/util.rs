@@ -1,9 +1,16 @@
 use std::path::PathBuf;
 
+use spinne_logger::Logger;
+
 /// Check if a string is in PascalCase.
 /// We can only check here if the first character is uppercase because we don't know the context of the string.
 pub fn is_pascal_case(name: &str) -> bool {
     name.chars().next().map_or(false, |c| c.is_uppercase())
+}
+
+pub fn reduce_to_node_module_name(path: &str) -> String {
+    let last = path.split("node_modules/").last().unwrap().to_string();
+    last.split('/').next().unwrap().to_string()
 }
 
 /// Replace an absolute path with a project name.
@@ -13,7 +20,14 @@ pub fn replace_absolute_path_with_project_name(
     path: PathBuf,
     prepend_with: &str,
 ) -> PathBuf {
-    let relative_path = path.strip_prefix(project_root).unwrap().to_path_buf();
+    let stripped_path = path.strip_prefix(project_root);
+
+    if let Err(e) = stripped_path {
+        Logger::error(&format!("Error stripping path: {:?}", e));
+        return path;
+    }
+
+    let relative_path = stripped_path.unwrap().to_path_buf();
 
     PathBuf::from(prepend_with).join(relative_path)
 }
@@ -66,5 +80,10 @@ mod tests {
             ),
             PathBuf::from("test-project/src/main.tsx")
         );
+    }
+
+    #[test]
+    fn test_reduce_to_node_module_name() {
+        assert_eq!(reduce_to_node_module_name("node_modules/material-ui/index.tsx"), "material-ui");
     }
 }
