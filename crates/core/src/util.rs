@@ -84,6 +84,9 @@ mod tests {
 
     #[test]
     fn test_reduce_to_node_module_name() {
-        assert_eq!(reduce_to_node_module_name("node_modules/material-ui/index.tsx"), "material-ui");
+        assert_eq!(
+            reduce_to_node_module_name("node_modules/material-ui/index.tsx"),
+            "material-ui"
+        );
     }
 }

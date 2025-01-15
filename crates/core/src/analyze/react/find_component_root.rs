@@ -85,9 +85,17 @@ fn recursive_find(
 
     let resolved_path = resolved_path.unwrap();
 
-    if resolved_path.path().to_str().unwrap().contains("node_modules") {
+    if resolved_path
+        .path()
+        .to_str()
+        .unwrap()
+        .contains("node_modules")
+    {
         let node_module_name = reduce_to_node_module_name(resolved_path.path().to_str().unwrap());
-        return Some((node_module_name.to_string(), node_module_name.to_string().into()));
+        return Some((
+            node_module_name.to_string(),
+            node_module_name.to_string().into(),
+        ));
     }
 
     if resolved_path.path().is_file() {
