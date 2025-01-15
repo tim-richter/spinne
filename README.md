@@ -14,7 +14,7 @@ Spins a web of component relationships for react projects
 
 ---
 
-Spinne is a CLI Tool that analyzes react projects and creates a component graph from all components that are used in it. This allows you to make some educated guesses about:
+Spinne is a CLI Tool, that analyzes react projects, and creates a component graph from all components that are used. This allows you to make some educated guesses about:
 - component usage
 - component relationships
 
