@@ -9,9 +9,9 @@ repository = "https://github.com/tim-richter/spinne"
 readme = "../../README.md"
 
 [dependencies]
-spinne-core = "0.2.1"
-spinne-html = "0.2.0"
-spinne-logger = "0.2.0"
+spinne-core = "0"
+spinne-html = "0"
+spinne-logger = "0"
 serde_json = { workspace = true }
 clap = { version = "4.5.20", features = ["derive"] }
 open = "5"
