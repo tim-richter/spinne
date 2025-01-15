@@ -25,12 +25,12 @@ Spinne is a CLI Tool, that analyzes react projects, and creates a component grap
   "nodes": [
     {
       "name": "ButtonGroup",
-      "file_path": "@smartclip/common-ui-components/src/components/Button/ButtonGroup.tsx",
+      "file_path": "my-project/src/components/Button/ButtonGroup.tsx",
       "prop_usage": {}
     },
     {
       "name": "MyComponent",
-      "file_path": "@smartclip/common-ui-components/src/components/MyComponent.tsx",
+      "file_path": "my-project/src/components/MyComponent.tsx",
       "prop_usage": {}
     }
   ],
