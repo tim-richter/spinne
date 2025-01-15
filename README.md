@@ -6,11 +6,45 @@
   Spinne
 </h1>
 <p align="center">
-Spins a web of components and analyzes component/prop usage in your react project
+Spins a web of component relationships for react projects
 </p>
 <p align="center">
-  <img alt="Crates.io Version" src="https://img.shields.io/crates/v/spinne?style=for-the-badge&label=%20">
+  <a href="https://crates.io/crates/spinne"><img alt="Crates.io Version" src="https://img.shields.io/crates/v/spinne?style=for-the-badge&label=%20"></a>
 </p>
+
+---
+
+Spinne is a CLI Tool that analyzes react projects and creates a component graph from all components that are used in it. This allows you to make some educated guesses about:
+- component usage
+- component relationships
+
+## Example
+
+```json
+{
+  "nodes": [
+    {
+      "name": "ButtonGroup",
+      "file_path": "@smartclip/common-ui-components/src/components/Button/ButtonGroup.tsx",
+      "prop_usage": {}
+    },
+    {
+      "name": "MyComponent",
+      "file_path": "@smartclip/common-ui-components/src/components/MyComponent.tsx",
+      "prop_usage": {}
+    }
+  ],
+  "edges": [
+    [
+      0,
+      1
+    ]
+  ]
+}
+```
+
+For the graph, we are using a directed adjacency graph, which means relationships between components are representated by edges, or weights.
+A '0' to '1' edge, would mean, that the first node, "ButtonGroup", uses the second node, "MyComponent", in the code of our project.
 
 ## Installation
 
