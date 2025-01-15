@@ -48,7 +48,7 @@ A '0' to '1' edge, would mean, that the first node, "ButtonGroup", uses the seco
 
 ## Installation
 
-Spinne is a command line tool written in rust, so you need to have rust/cargo installed.
+Spinne is a command line tool written in rust, so the easiest way to install it is via cargo:
 
 ```bash
 cargo install spinne
