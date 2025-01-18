@@ -12,10 +12,6 @@ struct Args {
     #[arg(short, long, default_value = "./")]
     entry: PathBuf,
 
-    /// Output file name
-    #[arg(long, default_value = "spinne-report")]
-    file_name: Option<String>,
-
     /// output format
     #[arg(short, long, default_value = "file")]
     format: Format,
@@ -44,6 +40,8 @@ enum Format {
     Html,
 }
 
+const FILE_NAME: &str = "spinne-report";
+
 fn main() -> std::io::Result<()> {
     let args = Args::parse();
 
@@ -54,12 +52,10 @@ fn main() -> std::io::Result<()> {
     let mut project = Project::new(absolute_entry);
     project.traverse(&args.exclude, &args.include);
 
-    let file_name = args.file_name.unwrap();
-
     // output to json file in current working directory
     if args.format == Format::File {
         let current_dir = std::env::current_dir()?;
-        let output_path_with_extension = current_dir.join(format!("{}.json", file_name));
+        let output_path_with_extension = current_dir.join(format!("{}.json", FILE_NAME));
 
         Logger::info(&format!(
             "Writing report to: {:?}",
@@ -79,7 +75,7 @@ fn main() -> std::io::Result<()> {
     // output to html file in current working directory
     if args.format == Format::Html {
         let current_dir = std::env::current_dir()?;
-        let output_path_with_extension = current_dir.join(format!("{}.html", file_name));
+        let output_path_with_extension = current_dir.join(format!("{}.html", FILE_NAME));
 
         Logger::info(&format!(
             "Writing report to: {:?}",
