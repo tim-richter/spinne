@@ -1,6 +1,6 @@
 [package]
 name = "spinne-core"
-version = "0.2.6"
+version = "0.2.7"
 description = "Core logic for spinne"
 edition = "2021"
 license = "MIT"
