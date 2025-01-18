@@ -33,17 +33,61 @@ impl ProjectResolver {
                 config_file: tsconfig.to_path_buf(),
                 references: TsconfigReferences::Auto,
             }),
-            condition_names: vec!["node".to_string(), "import".to_string()],
+            condition_names: vec![
+                "default".to_string(),
+                "types".to_string(),
+                "import".to_string(),
+                "require".to_string(),
+                "node".to_string(),
+                "node-addons".to_string(),
+                "browser".to_string(),
+                "esm2020".to_string(),
+                "es2020".to_string(),
+                "es2015".to_string(),
+            ],
             extensions: vec![
                 ".ts".to_string(),
                 ".tsx".to_string(),
+                ".d.ts".to_string(),
                 ".js".to_string(),
                 ".jsx".to_string(),
+                ".mjs".to_string(),
+                ".cjs".to_string(),
+                ".json".to_string(),
+                ".node".to_string(),
             ],
-            extension_alias: vec![(
-                ".js".to_string(),
-                vec![".ts".to_string(), ".js".to_string()],
-            )],
+            extension_alias: vec![
+                (
+                    ".js".to_string(),
+                    vec![
+                        ".ts".to_string(),
+                        ".tsx".to_string(),
+                        ".d.ts".to_string(),
+                        ".js".to_string(),
+                    ],
+                ),
+                (
+                    ".jsx".to_string(),
+                    vec![".tsx".to_string(), ".d.ts".to_string(), ".jsx".to_string()],
+                ),
+                (
+                    ".mjs".to_string(),
+                    vec![".mts".to_string(), ".mjs".to_string()],
+                ),
+                (
+                    ".cjs".to_string(),
+                    vec![".cts".to_string(), ".cjs".to_string()],
+                ),
+            ],
+            main_fields: vec![
+                "types".to_string(),
+                "typings".to_string(),
+                "module".to_string(),
+                "main".to_string(),
+                "browser".to_string(),
+                "jsnext:main".to_string(),
+            ],
+            alias_fields: vec![vec!["browser".to_string()]],
             ..ResolveOptions::default()
         };
 
@@ -56,111 +100,171 @@ impl ProjectResolver {
 
 #[cfg(test)]
 mod tests {
-    use std::fs;
-
-    use tempfile::TempDir;
+    use crate::util::test_utils;
 
     use super::*;
 
     #[test]
     fn test_resolve_file_path() {
-        let temp_dir = TempDir::new().unwrap();
-        let root = temp_dir.path();
-
-        let src_dir = root.join("src");
-        let components_dir = src_dir.join("components");
-        fs::create_dir_all(&src_dir).unwrap();
-        fs::create_dir_all(&components_dir).unwrap();
-
-        let button_file = components_dir.join("Button.tsx");
-        let index_file = components_dir.join("index.ts");
-        fs::write(
-            &button_file,
-            "export function Button() { return <div>Button</div>; }",
-        )
-        .unwrap();
-        fs::write(&index_file, "import { Button } from './Button';").unwrap();
+        let temp_dir = test_utils::create_mock_project(&vec![
+            (
+                "src/components/Button.tsx",
+                "export function Button() { return <div>Button</div>; }",
+            ),
+            (
+                "src/components/index.ts",
+                "import { Button } from './Button';",
+            ),
+        ]);
 
         let specifier = "./components/Button";
         let resolver = ProjectResolver::new(None);
-        let resolution = resolver.resolve(&src_dir, &specifier);
+        let resolution = resolver.resolve(&temp_dir.path().join("src"), &specifier);
 
         assert!(resolution.is_ok());
         assert_eq!(
             resolution.unwrap().path(),
-            components_dir.join("Button.tsx")
+            temp_dir.path().join("src/components/Button.tsx")
         );
     }
 
     #[test]
     fn test_resolve_file_path_with_tsconfig_paths() {
-        let temp_dir = TempDir::new().unwrap();
-        let root = temp_dir.path();
+        let temp_dir = test_utils::create_mock_project(&vec![
+            (
+                "tsconfig.json",
+                r#"{
+                "compilerOptions": {
+                "baseUrl": ".",
+                "paths": {
+                    "@components/*": ["./src/components/*"]
+                }
+            }
+            }"#,
+            ),
+            (
+                "src/components/Button.tsx",
+                "export function Button() { return <div>Button</div>; }",
+            ),
+            (
+                "src/components/index.ts",
+                "import { Button } from './Button';",
+            ),
+        ]);
 
-        let src_dir = root.join("src");
-        let components_dir = src_dir.join("components");
-        fs::create_dir_all(&src_dir).unwrap();
-        fs::create_dir_all(&components_dir).unwrap();
-
-        let button_file = components_dir.join("Button.tsx");
-        let index_file = components_dir.join("index.ts");
-        fs::write(
-            &button_file,
-            "export function Button() { return <div>Button</div>; }",
-        )
-        .unwrap();
-        fs::write(&index_file, "import { Button } from './Button';").unwrap();
-
-        let tsconfig_path = root.join("tsconfig.json");
-        fs::write(
-            &tsconfig_path,
-            r#"{
-        "compilerOptions": {
-          "baseUrl": ".",
-          "paths": {
-            "@components/*": ["./src/components/*"]
-          }
-        }
-      }"#,
-        )
-        .unwrap();
         let specifier = "@components/Button";
-        let resolver = ProjectResolver::new(Some(tsconfig_path));
-        let resolution = resolver.resolve(&src_dir, &specifier);
+        let resolver = ProjectResolver::new(Some(temp_dir.path().join("tsconfig.json")));
+        let resolution = resolver.resolve(&temp_dir.path().join("src"), &specifier);
 
         assert!(resolution.is_ok());
         assert_eq!(
             resolution.unwrap().path(),
-            components_dir.join("Button.tsx")
+            temp_dir.path().join("src/components/Button.tsx")
         );
     }
 
     #[test]
     fn test_resolve_file_path_with_node_modules() {
-        let temp_dir = TempDir::new().unwrap();
-        let root = temp_dir.path();
-
-        let src_dir = root.join("src");
-        let node_modules_dir = root.join("node_modules");
-        fs::create_dir_all(&src_dir).unwrap();
-        fs::create_dir_all(&node_modules_dir).unwrap();
-
-        let framer_motion_dir = node_modules_dir.join("framer-motion");
-        fs::create_dir_all(&framer_motion_dir).unwrap();
-        fs::write(
-            &framer_motion_dir.join("index.js"),
-            "module.exports = { motion: () => <div>Framer Motion</div> };",
-        )
-        .unwrap();
+        let temp_dir = test_utils::create_mock_project(&vec![
+            (
+                "node_modules/framer-motion/index.js",
+                "module.exports = { motion: () => <div>Framer Motion</div> };",
+            ),
+            (
+                "src/components/Button.tsx",
+                "export function Button() { return <div>Button</div>; }",
+            ),
+            (
+                "src/components/index.ts",
+                "import { Button } from './Button';",
+            ),
+        ]);
 
         let specifier = "framer-motion";
         let resolver = ProjectResolver::new(None);
-        let resolution = resolver.resolve(&src_dir, &specifier);
+        let resolution = resolver.resolve(&temp_dir.path().join("src"), &specifier);
 
         assert!(resolution.is_ok());
         assert_eq!(
             resolution.unwrap().path(),
-            node_modules_dir.join("framer-motion").join("index.js")
+            temp_dir.path().join("node_modules/framer-motion/index.js")
+        );
+    }
+
+    #[test]
+    fn test_resolve_node16_imports() {
+        let temp_dir = test_utils::create_mock_project(&vec![
+            (
+                "package.json",
+                r#"{
+                "type": "module"
+            }"#,
+            ),
+            (
+                "tsconfig.json",
+                r#"{
+                "compilerOptions": {
+                    "baseUrl": ".",
+                    "module": "NodeNext",
+                    "moduleResolution": "NodeNext",
+                    "paths": {
+                        "@components/*": ["./src/components/*"]
+                    }
+                }
+            }"#,
+            ),
+            (
+                "src/components/index.ts",
+                "export { Button } from './Button';",
+            ),
+            (
+                "src/components/Button/index.ts",
+                "export function Button() { return <div>Button</div>; }",
+            ),
+            (
+                "src/components/Button.tsx",
+                "export function Button() { return <div>Button</div>; }",
+            ),
+        ]);
+
+        let specifier = "./components/Button.js";
+        let resolver = ProjectResolver::new(Some(temp_dir.path().join("tsconfig.json")));
+        let resolution = resolver.resolve(&temp_dir.path().join("src"), &specifier);
+
+        assert!(resolution.is_ok());
+        assert_eq!(
+            resolution.unwrap().path(),
+            temp_dir.path().join("src/components/Button.tsx")
+        );
+
+        let specifier = "./components/index.js";
+        let resolver = ProjectResolver::new(Some(temp_dir.path().join("tsconfig.json")));
+        let resolution = resolver.resolve(&temp_dir.path().join("src"), &specifier);
+
+        assert!(resolution.is_ok());
+        assert_eq!(
+            resolution.unwrap().path(),
+            temp_dir.path().join("src/components/index.ts")
+        );
+
+        let specifier = "./components/Button/index.js";
+        let resolver = ProjectResolver::new(Some(temp_dir.path().join("tsconfig.json")));
+        let resolution = resolver.resolve(&temp_dir.path().join("src"), &specifier);
+
+        assert!(resolution.is_ok());
+        assert_eq!(
+            resolution.unwrap().path(),
+            temp_dir.path().join("src/components/Button/index.ts")
+        );
+
+        let specifier = "@components/Button/index.js";
+        let resolver = ProjectResolver::new(Some(temp_dir.path().join("tsconfig.json")));
+        let resolution = resolver.resolve(&temp_dir.path().join("src"), &specifier);
+
+        assert!(resolution.is_ok());
+        assert_eq!(
+            resolution.unwrap().path(),
+            temp_dir.path().join("src/components/Button/index.ts")
         );
     }
 }
