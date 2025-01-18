@@ -1,6 +1,6 @@
 [package]
 name = "spinne"
-version = "0.2.7"
+version = "0.2.8"
 description = "spinne is a cli tool that analyzes design system usage for react projects."
 edition = "2021"
 license = "MIT"
