@@ -44,4 +44,48 @@ mod tests {
         assert!(generator.template.contains("ComponentA"));
         assert!(!generator.template.contains("{{GRAPH_DATA}}"));
     }
+
+    #[test]
+    fn test_html() {
+        let graph_data = json!({
+            "nodes": [
+                {
+                    "name": "ComponentA",
+                    "file_path": "/path/to/ComponentA.tsx",
+                    "prop_usage": {}
+                },
+                {
+                    "name": "ComponentB",
+                    "file_path": "/path/to/ComponentB.tsx",
+                    "prop_usage": {}
+                },
+                {
+                    "name": "ComponentC",
+                    "file_path": "/path/to/ComponentC.tsx",
+                    "prop_usage": {}
+                },
+                {
+                    "name": "ComponentD",
+                    "file_path": "/path/to/ComponentD.tsx",
+                    "prop_usage": {}
+                },
+                {
+                    "name": "ComponentE",
+                    "file_path": "/path/to/ComponentE.tsx",
+                    "prop_usage": {}
+                }
+            ],
+            "edges": [
+                [0, 1],
+                [2, 1],
+                [3, 1],
+                [3, 4]
+            ]
+        });
+
+        let generator = HtmlGenerator::new(graph_data);
+        let output_path = Path::new("test.html");
+        generator.save(output_path).unwrap();
+        open::that(output_path).unwrap();
+    }
 }

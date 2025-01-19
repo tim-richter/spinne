@@ -1207,6 +1207,7 @@ dependencies = [
 name = "spinne-html"
 version = "0.2.3"
 dependencies = [
+ "open",
  "serde_json",
 ]
 

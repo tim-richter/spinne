@@ -114,9 +114,9 @@ mod tests {
     #[test]
     fn test_loading_indicator() {
         Logger::loading("Processing files...");
-        std::thread::sleep(std::time::Duration::from_millis(500));
+        std::thread::sleep(std::time::Duration::from_millis(5000));
         Logger::info("Some info while loading");
-        std::thread::sleep(std::time::Duration::from_millis(500));
+        std::thread::sleep(std::time::Duration::from_millis(5000));
         Logger::done_loading();
     }
 }
