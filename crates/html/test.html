@@ -59,6 +59,33 @@
             width: 200px;
             font-size: 14px;
         }
+
+        .export-container {
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            z-index: 1000;
+            background: white;
+            padding: 10px;
+            border-radius: 4px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            display: flex;
+            gap: 8px;
+        }
+
+        .export-button {
+            padding: 8px 16px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            background: white;
+            cursor: pointer;
+            font-size: 14px;
+            transition: background-color 0.2s;
+        }
+
+        .export-button:hover {
+            background: #f0f0f0;
+        }
     </style>
 </head>
 <body>
@@ -67,6 +94,10 @@
                class="search-input" 
                placeholder="Search components..."
                oninput="filterNodes(this.value)">
+    </div>
+    <div class="export-container">
+        <button class="export-button" onclick="exportAsSVG()">Export SVG</button>
+        <button class="export-button" onclick="exportAsPNG()">Export PNG</button>
     </div>
     <div id="graph"></div>
     <script>
@@ -250,69 +281,35 @@
             if (!event.active) simulation.alphaTarget(0);
         }
 
-        const zoomControls = svg.append("g")
-            .attr("class", "zoom-controls")
-            .attr("transform", "translate(20, 20)");
+        function filterNodes(searchTerm) {
+            searchTerm = searchTerm.toLowerCase();
 
-        zoomControls.append("rect")
-            .attr("width", 30)
-            .attr("height", 60)
-            .attr("fill", "white")
-            .attr("stroke", "#999");
+            // Filter nodes based on search term
+            const filteredNodes = searchTerm === "" 
+                ? graphData.nodes 
+                : graphData.nodes.filter(d => d.name.toLowerCase().includes(searchTerm));
 
-        zoomControls.append("text")
-            .attr("x", 15)
-            .attr("y", 20)
-            .attr("text-anchor", "middle")
-            .style("cursor", "pointer")
-            .text("+")
-            .on("click", () => {
-                svg.transition()
-                    .duration(300)
-                    .call(zoom.scaleBy, 1.3);
-            });
+            // Get indices of filtered nodes for edge filtering
+            const filteredIndices = new Set(filteredNodes.map((_, i) => i));
 
-        zoomControls.append("text")
-            .attr("x", 15)
-            .attr("y", 45)
-            .attr("text-anchor", "middle")
-            .style("cursor", "pointer")
-            .text("-")
-            .on("click", () => {
-                svg.transition()
-                    .duration(300)
-                    .call(zoom.scaleBy, 0.7);
-            });
+            // Filter edges to only include connections between visible nodes
+            const filteredEdges = searchTerm === ""
+                ? graphData.edges
+                : graphData.edges.filter(d => 
+                    filteredIndices.has(d[0]) && filteredIndices.has(d[1]));
 
-            function filterNodes(searchTerm) {
-                searchTerm = searchTerm.toLowerCase();
+            // Clear existing graph
+            g.selectAll("*").remove();
 
-                // Filter nodes based on search term
-                const filteredNodes = searchTerm === "" 
-                    ? graphData.nodes 
-                    : graphData.nodes.filter(d => d.name.toLowerCase().includes(searchTerm));
+            // Create filtered graph data
+            const filteredData = {
+                nodes: filteredNodes,
+                edges: filteredEdges
+            };
 
-                // Get indices of filtered nodes for edge filtering
-                const filteredIndices = new Set(filteredNodes.map((_, i) => i));
-
-                // Filter edges to only include connections between visible nodes
-                const filteredEdges = searchTerm === ""
-                    ? graphData.edges
-                    : graphData.edges.filter(d => 
-                        filteredIndices.has(d[0]) && filteredIndices.has(d[1]));
-
-                // Clear existing graph
-                g.selectAll("*").remove();
-
-                // Create filtered graph data
-                const filteredData = {
-                    nodes: filteredNodes,
-                    edges: filteredEdges
-                };
-
-                // Rerender the graph with filtered data
-                renderGraph(filteredData);
-            }
+            // Rerender the graph with filtered data
+            renderGraph(filteredData);
+        }
 
         function showTooltip(event, d) {
             tooltip.transition()
@@ -342,6 +339,137 @@
                 filterNodes('');
             }
         });
+
+        // Function to export as SVG
+        function exportAsSVG() {
+            // Get the SVG element
+            const svgElement = document.querySelector('svg');
+            
+            // Deep clone the SVG to avoid modifying the original
+            const clonedSvg = svgElement.cloneNode(true);
+            
+            // Add necessary styles inline
+            const styleElement = document.createElement('style');
+            styleElement.textContent = `
+                .node {
+                    stroke: #fff;
+                    stroke-width: 1.5px;
+                }
+                .link {
+                    stroke: #999;
+                    stroke-opacity: 0.6;
+                    stroke-width: 1px;
+                }
+                .node text {
+                    font-size: 12px;
+                    font-family: Arial, sans-serif;
+                }
+                marker#arrowhead path {
+                    fill: #999;
+                }
+            `;
+            clonedSvg.insertBefore(styleElement, clonedSvg.firstChild);
+            
+            // Ensure the SVG has the correct size attributes
+            const bbox = svgElement.getBBox();
+            clonedSvg.setAttribute('width', bbox.width + bbox.x * 2);
+            clonedSvg.setAttribute('height', bbox.height + bbox.y * 2);
+            clonedSvg.setAttribute('viewBox', `${bbox.x} ${bbox.y} ${bbox.width + bbox.x} ${bbox.height + bbox.y}`);
+            
+            // Get the SVG source with the added styles
+            const serializer = new XMLSerializer();
+            const source = serializer.serializeToString(clonedSvg);
+            
+            // Add XML declaration and SVG namespace
+            const svgData = '<?xml version="1.0" standalone="no"?>\r\n' + source;
+            
+            // Create Blob and download
+            const svgBlob = new Blob([svgData], { type: 'image/svg+xml;charset=utf-8' });
+            const svgUrl = URL.createObjectURL(svgBlob);
+            
+            // Create download link
+            const downloadLink = document.createElement('a');
+            downloadLink.href = svgUrl;
+            downloadLink.download = 'component-graph.svg';
+            document.body.appendChild(downloadLink);
+            downloadLink.click();
+            document.body.removeChild(downloadLink);
+            
+            // Clean up
+            URL.revokeObjectURL(svgUrl);
+        }
+
+        // Function to export as PNG
+        function exportAsPNG() {
+            // Get the SVG element
+            const svgElement = document.querySelector('svg');
+            
+            // Get the SVG dimensions
+            const bbox = svgElement.getBBox();
+            const width = bbox.width + bbox.x * 2;
+            const height = bbox.height + bbox.y * 2;
+            
+            // Create a canvas element
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+            
+            // Set canvas size to match SVG
+            canvas.width = width;
+            canvas.height = height;
+            
+            // Clone and prepare SVG for export (similar to SVG export)
+            const clonedSvg = svgElement.cloneNode(true);
+            const styleElement = document.createElement('style');
+            styleElement.textContent = `
+                .node {
+                    stroke: #fff;
+                    stroke-width: 1.5px;
+                }
+                .link {
+                    stroke: #999;
+                    stroke-opacity: 0.6;
+                    stroke-width: 1px;
+                }
+                .node text {
+                    font-size: 12px;
+                    font-family: Arial, sans-serif;
+                }
+                marker#arrowhead path {
+                    fill: #999;
+                }
+            `;
+            clonedSvg.insertBefore(styleElement, clonedSvg.firstChild);
+            clonedSvg.setAttribute('width', width);
+            clonedSvg.setAttribute('height', height);
+            clonedSvg.setAttribute('viewBox', `${bbox.x} ${bbox.y} ${bbox.width + bbox.x} ${bbox.height + bbox.y}`);
+            
+            // Create an image from the SVG
+            const image = new Image();
+            const svgData = new XMLSerializer().serializeToString(clonedSvg);
+            const svgBlob = new Blob([svgData], { type: 'image/svg+xml;charset=utf-8' });
+            const svgUrl = URL.createObjectURL(svgBlob);
+            
+            image.onload = function() {
+                // Draw the image on the canvas
+                ctx.fillStyle = 'white';
+                ctx.fillRect(0, 0, width, height);
+                ctx.drawImage(image, 0, 0);
+                
+                // Convert canvas to PNG and download
+                const pngUrl = canvas.toDataURL('image/png');
+                const downloadLink = document.createElement('a');
+                downloadLink.href = pngUrl;
+                downloadLink.download = 'component-graph.png';
+                document.body.appendChild(downloadLink);
+                downloadLink.click();
+                document.body.removeChild(downloadLink);
+                
+                // Clean up
+                URL.revokeObjectURL(svgUrl);
+            };
+            
+            image.src = svgUrl;
+        }
     </script>
 </body>
 </html> 
