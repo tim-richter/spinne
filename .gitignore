@@ -8,3 +8,4 @@ debug/
 
 .env
 tarpaulin-report.html
+test.html

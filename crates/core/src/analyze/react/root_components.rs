@@ -196,12 +196,8 @@ fn get_children<'a>(
                         Expression::ArrowFunctionExpression(arrow_fn_expr) => {
                             let body = &arrow_fn_expr.body;
 
-                            let child_components = traverse_body(
-                                semantic,
-                                body,
-                                resolver,
-                                file_path.parent().unwrap().to_path_buf(),
-                            );
+                            let child_components =
+                                traverse_body(semantic, body, resolver, file_path.clone());
 
                             return child_components;
                         }
@@ -214,12 +210,7 @@ fn get_children<'a>(
             let body = &fn_decl.body;
 
             if let Some(body) = body {
-                let child_components = traverse_body(
-                    semantic,
-                    body,
-                    resolver,
-                    file_path.parent().unwrap().to_path_buf(),
-                );
+                let child_components = traverse_body(semantic, body, resolver, file_path.clone());
 
                 return child_components;
             }
@@ -260,6 +251,7 @@ struct ReturnVisitor<'a> {
     semantic: &'a Semantic<'a>,
     resolver: &'a ProjectResolver,
     file_path: PathBuf,
+    parent_file_path: PathBuf,
     child_components: Vec<ComponentChild>,
 }
 
@@ -268,7 +260,8 @@ impl<'a> ReturnVisitor<'a> {
         Self {
             semantic,
             resolver,
-            file_path,
+            file_path: file_path.clone(),
+            parent_file_path: file_path.parent().unwrap().to_path_buf(),
             child_components: Vec::new(),
         }
     }
@@ -299,13 +292,20 @@ impl<'a> Visit<'a> for ReturnVisitor<'a> {
                         let component_root = find_component_root(
                             self.semantic,
                             self.resolver,
-                            &self.file_path,
+                            &self.parent_file_path,
                             import_node_id,
                             &ident_name,
                         );
 
                         if let Some(component_root) = component_root {
                             component_child.origin_file_path = component_root.1;
+                        }
+                    } else {
+                        let declaration = self.semantic.symbols().get_declaration(symbol_id);
+                        let declaration_node = self.semantic.nodes().get_node(declaration);
+
+                        if is_react_component(declaration_node) {
+                            component_child.origin_file_path = self.file_path.clone();
                         }
                     }
                 }
@@ -324,9 +324,7 @@ impl<'a> Visit<'a> for ReturnVisitor<'a> {
                                 component_child.props.insert(ident_name, 1);
                             }
                         }
-                        JSXAttributeItem::SpreadAttribute(jsx_spread_attribute) => {
-                            println!("jsx_spread_attribute: {:?}", jsx_spread_attribute);
-                        }
+                        JSXAttributeItem::SpreadAttribute(jsx_spread_attribute) => {}
                     });
 
                 self.child_components.push(component_child);
@@ -570,5 +568,39 @@ mod tests {
         );
         assert_eq!(components[0].children[0].props.len(), 1);
         assert_eq!(components[0].children[0].props.get("placeholder"), Some(&1));
+    }
+
+    #[test]
+    fn test_should_use_correct_path_for_components_that_are_used_from_same_file() {
+        let files = vec![(
+            "src/components/Button.tsx",
+            r#"
+                function ButtonGroup() {
+                  return <Button />;
+                }
+
+                function Button() {
+                  return <button>Hello</button>;
+                }
+            "#,
+        )];
+        let temp_dir = create_mock_project(&files);
+
+        let allocator = Allocator::default();
+        let semantic = setup_semantic(&allocator, &files[0].1);
+        let components = extract_components(
+            &semantic.semantic,
+            &ProjectResolver::new(None),
+            PathBuf::from(temp_dir.path().join("src/components/Button.tsx")),
+        );
+
+        assert_eq!(components[0].name, "ButtonGroup");
+        assert_eq!(components[0].children[0].name, "Button");
+        assert_eq!(
+            components[0].children[0].origin_file_path,
+            PathBuf::from(temp_dir.path().join("src/components/Button.tsx"))
+        );
+
+        assert_eq!(components[1].name, "Button");
     }
 }
