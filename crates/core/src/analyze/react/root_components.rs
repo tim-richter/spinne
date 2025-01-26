@@ -307,6 +307,10 @@ impl<'a> Visit<'a> for ReturnVisitor<'a> {
                         if is_react_component(declaration_node) {
                             component_child.origin_file_path = self.file_path.clone();
                         }
+
+                        if let AstKind::FormalParameter(_) = declaration_node.kind() {
+                            return;
+                        }
                     }
                 }
 
@@ -602,5 +606,29 @@ mod tests {
         );
 
         assert_eq!(components[1].name, "Button");
+    }
+
+    #[test]
+    fn test_should_not_report_components_that_are_react_props() {
+        let files = vec![(
+            "src/components/Button.tsx",
+            r#"
+                function Button({ Component }) {
+                  return <button><Component /></button>;
+                }
+            "#,
+        )];
+        let temp_dir = create_mock_project(&files);
+
+        let allocator = Allocator::default();
+        let semantic = setup_semantic(&allocator, &files[0].1);
+        let components = extract_components(
+            &semantic.semantic,
+            &ProjectResolver::new(None),
+            PathBuf::from(temp_dir.path().join("src/components/Button.tsx")),
+        );
+
+        assert_eq!(components[0].name, "Button");
+        assert_eq!(components[0].children.len(), 0);
     }
 }
