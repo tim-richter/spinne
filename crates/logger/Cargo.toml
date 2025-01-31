@@ -3,7 +3,7 @@ name = "spinne-logger"
 description = "Logger for spinne"
 license = "MIT"
 repository = "https://github.com/tim-richter/spinne"
-version = "0.2.3"
+version = "0.3.0"
 edition = "2021"
 
 [dependencies]
