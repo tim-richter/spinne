@@ -9,8 +9,8 @@ use oxc_allocator::Allocator;
 use spinne_logger::Logger;
 
 use crate::{
-    analyze::react::analyzer::ReactAnalyzer, parse::parse_tsx,
-    util::replace_absolute_path_with_project_name, ComponentGraph, PackageJson,
+    analyze::react::analyzer::ReactAnalyzer, config::ConfigValues, parse::parse_tsx,
+    util::replace_absolute_path_with_project_name, ComponentGraph, Config, PackageJson,
 };
 
 use super::ProjectResolver;
@@ -22,6 +22,7 @@ pub struct Project {
     project_name: String,
     pub component_graph: ComponentGraph,
     resolver: ProjectResolver,
+    config: Option<ConfigValues>,
 }
 
 impl Project {
@@ -56,11 +57,14 @@ impl Project {
             ProjectResolver::new(None)
         };
 
+        let config = Config::read(project_root.join("spinne.json"));
+
         Self {
             project_root,
             project_name,
             component_graph: ComponentGraph::new(),
             resolver,
+            config,
         }
     }
 
@@ -70,13 +74,36 @@ impl Project {
     ///
     /// - `exclude`: A list of patterns to exclude from the traversal.
     /// - `include`: A list of patterns to include in the traversal.
-    pub fn traverse(&mut self, exclude: &[String], include: &[String]) {
+    pub fn traverse(&mut self, exclude_params: &Vec<String>, include_params: &Vec<String>) {
         Logger::info(&format!(
             "Starting traversal of project: {}",
             self.project_name
         ));
 
-        let walker = self.build_walker(exclude, include);
+        let mut exclude = exclude_params.clone();
+        let mut include = include_params.clone();
+
+        // merge the config with the exclude and include patterns
+        if let Some(config) = &self.config {
+            exclude = match &config.exclude {
+                Some(exclude) => {
+                    let mut exclude_vec = exclude.clone();
+                    exclude_vec.extend(exclude_params.iter().map(|e| e.to_string()));
+                    exclude_vec
+                }
+                None => exclude.clone(),
+            };
+            include = match &config.include {
+                Some(include) => {
+                    let mut include_vec = include.clone();
+                    include_vec.extend(include_params.iter().map(|e| e.to_string()));
+                    include_vec
+                }
+                None => include.clone(),
+            };
+        }
+
+        let walker = self.build_walker(&exclude, &include);
         // we have to use a RwLock here because we are traversing the project in parallel
         let project = RwLock::new(self);
 
@@ -106,7 +133,7 @@ impl Project {
     ///
     /// - `exclude`: A list of patterns to exclude from the traversal.
     /// - `include`: A list of patterns to include in the traversal.
-    fn build_walker(&self, exclude: &[String], include: &[String]) -> WalkParallel {
+    fn build_walker(&self, exclude: &Vec<String>, include: &Vec<String>) -> WalkParallel {
         let exclude_patterns: Vec<String> = exclude
             .iter()
             .map(|pattern| format!("!{}", pattern)) // Add '!' to each pattern
@@ -210,7 +237,10 @@ mod tests {
         ]);
 
         let mut project = Project::new(temp_dir.path().to_path_buf());
-        project.traverse(&[], &["**/*.tsx".to_string(), "**/*.ts".to_string()]);
+        project.traverse(
+            &vec![],
+            &vec!["**/*.tsx".to_string(), "**/*.ts".to_string()],
+        );
 
         assert_eq!(project.component_graph.graph.node_count(), 1);
         assert!(project
@@ -242,7 +272,10 @@ mod tests {
         ]);
 
         let mut project = Project::new(temp_dir.path().to_path_buf());
-        project.traverse(&[], &["**/*.tsx".to_string(), "**/*.ts".to_string()]);
+        project.traverse(
+            &vec![],
+            &vec!["**/*.tsx".to_string(), "**/*.ts".to_string()],
+        );
 
         assert_eq!(project.component_graph.graph.node_count(), 2);
         assert!(project
@@ -292,7 +325,10 @@ mod tests {
         ]);
 
         let mut project = Project::new(temp_dir.path().to_path_buf());
-        project.traverse(&[], &["**/*.tsx".to_string(), "**/*.ts".to_string()]);
+        project.traverse(
+            &vec![],
+            &vec!["**/*.tsx".to_string(), "**/*.ts".to_string()],
+        );
 
         assert_eq!(project.component_graph.graph.node_count(), 2);
         assert!(project
@@ -342,7 +378,10 @@ mod tests {
         ]);
 
         let mut project = Project::new(temp_dir.path().to_path_buf());
-        project.traverse(&[], &["**/*.tsx".to_string(), "**/*.ts".to_string()]);
+        project.traverse(
+            &vec![],
+            &vec!["**/*.tsx".to_string(), "**/*.ts".to_string()],
+        );
 
         assert_eq!(project.component_graph.graph.node_count(), 2);
         assert!(project.component_graph.has_component(
@@ -367,5 +406,153 @@ mod tests {
                 .get_component("Button", &PathBuf::from("test/src/components/Button.tsx"))
                 .unwrap(),
         ));
+    }
+
+    #[test]
+    fn should_read_exclude_from_config() {
+        let temp_dir = test_utils::create_mock_project(&vec![
+            ("package.json", r#"{"name": "test"}"#),
+            (
+                "spinne.json",
+                r#"{"exclude": ["src/components/Button/ButtonGroup.tsx"]}"#,
+            ),
+            (
+                "tsconfig.json",
+                r#"{"compilerOptions": {"baseUrl": ".", "paths": {"@/*": ["src/*"]}}}"#,
+            ),
+            (
+                "src/components/Button/ButtonGroup.tsx",
+                r#"
+                    import React from 'react';
+                    import { Button } from '@/components/Button';
+
+                    export const ButtonGroup: React.FC<React.PropsWithChildren> = ({ children }) => { return <Button>{children}</Button>; }
+                "#,
+            ),
+            (
+                "src/pages/Button.tsx",
+                r#"
+                    import React from 'react';
+                    export const Button = () => { return "HI"; }
+                "#,
+            ),
+        ]);
+
+        let mut project = Project::new(temp_dir.path().to_path_buf());
+        project.traverse(
+            &vec![],
+            &vec!["**/*.tsx".to_string(), "**/*.ts".to_string()],
+        );
+
+        assert_eq!(project.component_graph.graph.node_count(), 1);
+    }
+
+    #[test]
+    fn should_merge_exclude_from_config() {
+        let temp_dir = test_utils::create_mock_project(&vec![
+            ("package.json", r#"{"name": "test"}"#),
+            (
+                "spinne.json",
+                r#"{"exclude": ["src/components/Button/ButtonGroup.tsx"]}"#,
+            ),
+            (
+                "tsconfig.json",
+                r#"{"compilerOptions": {"baseUrl": ".", "paths": {"@/*": ["src/*"]}}}"#,
+            ),
+            (
+                "src/components/Button/ButtonGroup.tsx",
+                r#"
+                    import React from 'react';
+                    import { Button } from '@/components/Button';
+
+                    export const ButtonGroup: React.FC<React.PropsWithChildren> = ({ children }) => { return <Button>{children}</Button>; }
+                "#,
+            ),
+            (
+                "src/pages/Button.tsx",
+                r#"
+                    import React from 'react';
+                    export const Button = () => { return "HI"; }
+                "#,
+            ),
+        ]);
+
+        let mut project = Project::new(temp_dir.path().to_path_buf());
+        project.traverse(
+            &vec![String::from("src/pages/Button.tsx")],
+            &vec!["**/*.tsx".to_string(), "**/*.ts".to_string()],
+        );
+
+        assert_eq!(project.component_graph.graph.node_count(), 0);
+    }
+
+    #[test]
+    fn should_read_include_from_config() {
+        let temp_dir = test_utils::create_mock_project(&vec![
+            ("package.json", r#"{"name": "test"}"#),
+            (
+                "spinne.json",
+                r#"{"include": ["src/components/Button/ButtonGroup.tsx"]}"#,
+            ),
+            (
+                "tsconfig.json",
+                r#"{"compilerOptions": {"baseUrl": ".", "paths": {"@/*": ["src/*"]}}}"#,
+            ),
+            (
+                "src/components/Button/ButtonGroup.tsx",
+                r#"
+                    import React from 'react';
+
+                    export const ButtonGroup: React.FC<React.PropsWithChildren> = ({ children }) => { return <button>{children}</button>; }
+                "#,
+            ),
+            (
+                "src/pages/Button.tsx",
+                r#"
+                    import React from 'react';
+                    export const Button = () => { return "HI"; }
+                "#,
+            ),
+        ]);
+
+        let mut project = Project::new(temp_dir.path().to_path_buf());
+        project.traverse(&vec![], &vec![]);
+
+        assert_eq!(project.component_graph.graph.node_count(), 1);
+    }
+
+    #[test]
+    fn should_merge_include_from_config() {
+        let temp_dir = test_utils::create_mock_project(&vec![
+            ("package.json", r#"{"name": "test"}"#),
+            (
+                "spinne.json",
+                r#"{"include": ["src/components/Button/ButtonGroup.tsx"]}"#,
+            ),
+            (
+                "tsconfig.json",
+                r#"{"compilerOptions": {"baseUrl": ".", "paths": {"@/*": ["src/*"]}}}"#,
+            ),
+            (
+                "src/components/Button/ButtonGroup.tsx",
+                r#"
+                    import React from 'react';
+
+                    export const ButtonGroup: React.FC<React.PropsWithChildren> = ({ children }) => { return <button>{children}</button>; }
+                "#,
+            ),
+            (
+                "src/pages/Button.tsx",
+                r#"
+                    import React from 'react';
+                    export const Button = () => { return "HI"; }
+                "#,
+            ),
+        ]);
+
+        let mut project = Project::new(temp_dir.path().to_path_buf());
+        project.traverse(&vec![], &vec!["src/pages/Button.tsx".to_string()]);
+
+        assert_eq!(project.component_graph.graph.node_count(), 2);
     }
 }
