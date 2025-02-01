@@ -3,7 +3,7 @@ name = "spinne-html"
 description = "HTML representation of component graph for spinne"
 license = "MIT"
 repository = "https://github.com/tim-richter/spinne"
-version = "0.3.0"
+version = "0.4.0"
 edition = "2021"
 
 [dependencies]
