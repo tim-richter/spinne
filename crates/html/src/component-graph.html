@@ -424,52 +424,55 @@
 		return clonedSvg
 	}
 
-	function exportSvg (svgElement) {
-		const bbox = svgElement.getBBox()
-		const clonedSvg = cloneAndPrepareSvg(svgElement, bbox)
-		const serializer = new XMLSerializer()
-		const source = serializer.serializeToString(clonedSvg)
-		const svgData = '<?xml version="1.0" standalone="no"?>\r\n' + source
-		const blob = new Blob([svgData], { type: 'image/svg+xml;charset=utf-8' })
-		const url = URL.createObjectURL(blob)
+	function exportSvg(svgElement) {
+	const svgNode = svgElement.node ? svgElement.node() : svgElement
+	const bbox = svgNode.getBBox()
+	const clonedSvg = cloneAndPrepareSvg(svgNode, bbox)
+	const serializer = new XMLSerializer()
+	const source = serializer.serializeToString(clonedSvg)
+	const svgData = '<?xml version="1.0" standalone="no"?>\r\n' + source
+	const blob = new Blob([svgData], { type: 'image/svg+xml;charset=utf-8' })
+	const url = URL.createObjectURL(blob)
+	const link = document.createElement('a')
+	link.href = url
+	link.download = 'component-graph.svg'
+	document.body.appendChild(link)
+	link.click()
+	document.body.removeChild(link)
+	URL.revokeObjectURL(url)
+}
+
+function exportPng(svgElement) {
+	const svgNode = svgElement.node ? svgElement.node() : svgElement
+	const bbox = svgNode.getBBox()
+	const width = bbox.width + bbox.x * 2
+	const height = bbox.height + bbox.y * 2
+	const canvas = document.createElement('canvas')
+	canvas.width = width
+	canvas.height = height
+	const ctx = canvas.getContext('2d')
+	const clonedSvg = cloneAndPrepareSvg(svgNode, bbox)
+	const serializer = new XMLSerializer()
+	const svgData = serializer.serializeToString(clonedSvg)
+	const blob = new Blob([svgData], { type: 'image/svg+xml;charset=utf-8' })
+	const url = URL.createObjectURL(blob)
+	const image = new Image()
+	image.onload = function () {
+		ctx.fillStyle = 'white'
+		ctx.fillRect(0, 0, width, height)
+		ctx.drawImage(image, 0, 0)
+		const pngUrl = canvas.toDataURL('image/png')
 		const link = document.createElement('a')
-		link.href = url
-		link.download = 'component-graph.svg'
+		link.href = pngUrl
+		link.download = 'component-graph.png'
 		document.body.appendChild(link)
 		link.click()
 		document.body.removeChild(link)
 		URL.revokeObjectURL(url)
 	}
+	image.src = url
+}
 
-	function exportPng (svgElement) {
-		const bbox = svgElement.getBBox()
-		const width = bbox.width + bbox.x * 2
-		const height = bbox.height + bbox.y * 2
-		const canvas = document.createElement('canvas')
-		canvas.width = width
-		canvas.height = height
-		const ctx = canvas.getContext('2d')
-		const clonedSvg = cloneAndPrepareSvg(svgElement, bbox)
-		const serializer = new XMLSerializer()
-		const svgData = serializer.serializeToString(clonedSvg)
-		const blob = new Blob([svgData], { type: 'image/svg+xml;charset=utf-8' })
-		const url = URL.createObjectURL(blob)
-		const image = new Image()
-		image.onload = function () {
-			ctx.fillStyle = 'white'
-			ctx.fillRect(0, 0, width, height)
-			ctx.drawImage(image, 0, 0)
-			const pngUrl = canvas.toDataURL('image/png')
-			const link = document.createElement('a')
-			link.href = pngUrl
-			link.download = 'component-graph.png'
-			document.body.appendChild(link)
-			link.click()
-			document.body.removeChild(link)
-			URL.revokeObjectURL(url)
-		}
-		image.src = url
-	}
 })()
 
 
