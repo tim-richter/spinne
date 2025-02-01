@@ -101,375 +101,380 @@
     </div>
     <div id="graph"></div>
     <script>
-        // The graph data will be injected here
-        const graphData = {{GRAPH_DATA}};
+        (function initComponentGraph () {
+	const graphData = {{GRAPH_DATA}}
 
-        // Width and height of the visualization
-        const width = window.innerWidth;
-        const height = window.innerHeight;
+	// Assign a unique id (as a string) to each node
+	graphData.nodes.forEach((node, i) => {
+		node.id = String(i)
+	})
 
-        // Create tooltip div
-        const tooltip = d3.select("body")
-            .append("div")
-            .attr("class", "tooltip")
-            .style("opacity", 0);
+	const width = window.innerWidth
+	const height = window.innerHeight
 
-        // Create SVG container
-        const svg = d3.select("#graph")
-            .append("svg")
-            .attr("width", width)
-            .attr("height", height);
+	const incomingEdgeCounts = calculateIncomingEdgeCounts(graphData.edges)
+	const svg = createSvg(width, height)
+	const g = svg.append('g')
+	const tooltip = createTooltip()
 
-        const g = svg.append("g");
-        const zoom = d3.zoom().scaleExtent([0.5, 4]).on("zoom", function(event) {
-            g.attr("transform", event.transform);
-        });
-        svg.call(zoom);
+	// Store zoom behavior so we can programmatically transform
+	const zoom = setupZoom(svg, g)
+	addArrowheadMarker(svg)
+	const simulation = createSimulation(width, height, graphData.nodes, graphData.edges)
+	renderGraph(graphData, { svg, g, simulation, tooltip, incomingEdgeCounts })
 
-        // Create the force simulation
-        const simulation = d3.forceSimulation()
-            .force("link", d3.forceLink().distance(100))
-            .force("charge", d3.forceManyBody().strength(-300))
-            .force("center", d3.forceCenter(width / 2, height / 2))
-            .force("collision", d3.forceCollide().radius(50));
+	// New search: mark nodes, update results list, and attach click to zoom.
+	window.filterNodes = function (searchTerm) {
+		const term = searchTerm.toLowerCase()
+		d3.selectAll('.node-group')
+			.transition()
+			.duration(200)
+			.attr('opacity', d => d.name.toLowerCase().includes(term) ? 1 : 0.2)
+		d3.selectAll('.link')
+			.transition()
+			.duration(200)
+			.attr('opacity', d =>
+				(d.source.name.toLowerCase().includes(term) ||
+				 d.target.name.toLowerCase().includes(term)) ? 1 : 0.2)
+		updateSearchResults(term)
+	}
 
-        // Calculate the number of incoming edges for each node
-        const incomingEdges = {};
-            graphData.edges.forEach(edge => {
-                const targetId = edge[1];
-                incomingEdges[targetId] = (incomingEdges[targetId] || 0) + 1;
-            });
+	window.exportAsSVG = function () {
+		exportSvg(svg)
+	}
+	window.exportAsPNG = function () {
+		exportPng(svg)
+	}
 
-        renderGraph(graphData);
+	document.addEventListener('keydown', handleKeydown)
 
-        function renderGraph(data) {
-            debugger
-            const links = data.edges.map(edge => ({
-                source: edge[0],
-                target: edge[1]
-            }));
+	// --- Helper Functions ---
 
-            // Create links
-            const link = g.append("g")
-                .selectAll("line")
-                .data(links)
-                .enter()
-                .append("line")
-                .attr("class", "link")
-                .attr("marker-end", "url(#arrowhead)");
+	function calculateIncomingEdgeCounts (edges) {
+		const counts = {}
+		edges.forEach(edge => {
+			const target = String(edge[1])
+			counts[target] = (counts[target] || 0) + 1
+		})
+		return counts
+	}
 
-            // Create nodes
-            const node = g.append("g")
-                .selectAll("g")
-                .data(data.nodes)
-                .enter()
-                .append("g")
-                .call(d3.drag()
-                    .on("start", dragstarted)
-                    .on("drag", dragged)
-                    .on("end", dragended))
-                .on("mouseover", function(event, d) {
-                    const transform = d3.zoomTransform(svg.node());
-                    tooltip.transition()
-                        .duration(200)
-                        .style("opacity", .9);
-                    tooltip.html(`Path: ${d.file_path}<br/>Props: ${Object.entries(d.prop_usage).map(([prop, count]) => `${prop}(${count})`).join(', ')}`)
-                        .style("left", (event.pageX + 10) + "px")
-                        .style("top", (event.pageY - 28) + "px");
-                })
-                .on("mouseout", function(d) {
-                    tooltip.transition()
-                        .duration(500)
-                        .style("opacity", 0);
-                });
+	function createSvg (width, height) {
+		return d3.select('#graph')
+			.append('svg')
+			.attr('width', width)
+			.attr('height', height)
+	}
 
-            // Add circles to nodes
-            node.append("circle")
-                .attr("class", "node")
-                .attr("r", getNodeRadius)
-                .attr("fill", getNodeColor);
+	function createTooltip () {
+		return d3.select('body')
+			.append('div')
+			.attr('class', 'tooltip')
+			.style('opacity', 0)
+	}
 
-            // Add labels to nodes
-            node.append("text")
-                .attr("dx", 12)
-                .attr("dy", ".35em")
-                .text(d => d.name);
-            
-            // Tick function to update positions
-            function ticked() {
-                link
-                    .attr("x1", d => d.source.x)
-                    .attr("y1", d => d.source.y)
-                    .attr("x2", d => {
-                        const dx = d.target.x - d.source.x;
-                        const dy = d.target.y - d.source.y;
-                        const length = Math.sqrt(dx * dx + dy * dy);
-                        if (length === 0) return d.target.x;
-                        
-                        // Get target node radius
-                        const targetRadius = getNodeRadius(d.target, d.target.index);
-                        return d.target.x - (dx * (targetRadius + 5)) / length;  // Add offset for arrow
-                    })
-                    .attr("y2", d => {
-                        const dx = d.target.x - d.source.x;
-                        const dy = d.target.y - d.source.y;
-                        const length = Math.sqrt(dx * dx + dy * dy);
-                        if (length === 0) return d.target.y;
-                        
-                        // Get target node radius
-                        const targetRadius = getNodeRadius(d.target, d.target.index);
-                        return d.target.y - (dy * (targetRadius + 5)) / length;  // Add offset for arrow
-                    });
+	// Return the zoom behavior so we can later call zoom.transform
+	function setupZoom (svg, container) {
+		const zoomBehavior = d3.zoom()
+			.scaleExtent([0.5, 4])
+			.on('zoom', event => {
+				container.attr('transform', event.transform)
+			})
+		svg.call(zoomBehavior)
+		return zoomBehavior
+	}
 
-                node
-                    .attr("transform", d => `translate(${d.x},${d.y})`);
-            }
+	function addArrowheadMarker (svg) {
+		svg.append('defs')
+			.append('marker')
+			.attr('id', 'arrowhead')
+			.attr('viewBox', '0 -5 10 10')
+			.attr('refX', 5)
+			.attr('refY', 0)
+			.attr('markerWidth', 8)
+			.attr('markerHeight', 8)
+			.attr('orient', 'auto')
+			.append('path')
+			.attr('d', 'M0,-5L10,0L0,5')
+			.attr('fill', '#999')
+	}
 
-            // Update positions on simulation tick
-            simulation
-                .nodes(data.nodes)
-                .on("tick", ticked);
+	function createSimulation (width, height, nodes, edges) {
+		const links = edges.map(edge => ({ source: String(edge[0]), target: String(edge[1]) }))
+		const sim = d3.forceSimulation(nodes)
+		sim.force('link', d3.forceLink().id(d => d.id).distance(100).links(links))
+		sim.force('charge', d3.forceManyBody().strength(-300))
+		sim.force('center', d3.forceCenter(width / 2, height / 2))
+		sim.force('collision', d3.forceCollide().radius(50))
+		return sim
+	}
 
-            simulation.force("link")
-                .links(links);
-        }
+	function renderGraph (data, context) {
+		const { simulation, g, tooltip, incomingEdgeCounts } = context
+		// Map node ids to objects for link resolution.
+		const nodeById = new Map(data.nodes.map(n => [n.id, n]))
+		const linksData = data.edges.map(edge => ({
+			source: nodeById.get(String(edge[0])),
+			target: nodeById.get(String(edge[1]))
+		}))
 
-        // Function to calculate node radius based on incoming edges
-        function getNodeRadius(d, i) {
-            const baseRadius = 5;
-            const edgeCount = incomingEdges[i] || 0;
-            return baseRadius + (edgeCount * 2); // Increase radius by 2px per incoming edge
-        }
+		const link = g.append('g')
+			.selectAll('line')
+			.data(linksData)
+			.enter()
+			.append('line')
+			.attr('class', 'link')
+			.attr('marker-end', 'url(#arrowhead)')
 
-        
-        // Update the arrowhead marker
-        svg.append("defs").append("marker")
-            .attr("id", "arrowhead")
-            .attr("viewBox", "0 -5 10 10")
-            .attr("refX", 5)  // Adjust this value if needed
-            .attr("refY", 0)
-            .attr("markerWidth", 8)
-            .attr("markerHeight", 8)
-            .attr("orient", "auto")
-            .append("path")
-            .attr("d", "M0,-5L10,0L0,5")
-            .attr("fill", "#999");
+		// Append node groups with class "node-group"
+		const node = g.append('g')
+			.selectAll('g')
+			.data(data.nodes)
+			.enter()
+			.append('g')
+			.attr('class', 'node-group')
+			.call(d3.drag()
+				.on('start', dragstarted)
+				.on('drag', dragged)
+				.on('end', dragended))
+			.on('mouseover', (event, d) => {
+				tooltip.transition()
+					.duration(200)
+					.style('opacity', 0.9)
+				tooltip.html(`Path: ${d.file_path}<br/>Props: ${formatProps(d.prop_usage)}`)
+					.style('left', (event.pageX + 10) + 'px')
+					.style('top', (event.pageY - 28) + 'px')
+			})
+			.on('mouseout', () => {
+				tooltip.transition()
+					.duration(500)
+					.style('opacity', 0)
+			})
 
-        // Helper function to determine node color based on type and incoming edges
-        function getNodeColor(node) {
-            const edgeCount = incomingEdges[node.index] || 0;
-            // Color based on number of incoming edges
-            if (edgeCount === 0) return "#69b3a2";
-            if (edgeCount < 3) return "#3498db";
-            if (edgeCount < 5) return "#e67e22";
-            return "#e74c3c";
-        }
+		node.append('circle')
+			.attr('class', 'node')
+			.attr('r', d => getNodeRadius(d, incomingEdgeCounts))
+			.attr('fill', d => getNodeColor(d, incomingEdgeCounts))
 
-        // Drag functions
-        function dragstarted(event, d) {
-            if (!event.active) simulation.alphaTarget(0.3).restart();
-            d.fx = d.x;
-            d.fy = d.y;
-        }
+		node.append('text')
+			.attr('dx', 12)
+			.attr('dy', '.35em')
+			.text(d => d.name)
 
-        function dragged(event, d) {
-            d.fx = event.x;
-            d.fy = event.y;
-        }
+		function ticked () {
+			link
+				.attr('x1', d => d.source.x)
+				.attr('y1', d => d.source.y)
+				.attr('x2', d => {
+					const delta = computeDelta(d)
+					const targetRadius = getNodeRadius(d.target, incomingEdgeCounts)
+					return d.target.x - (delta.dx * (targetRadius + 5)) / delta.length
+				})
+				.attr('y2', d => {
+					const delta = computeDelta(d)
+					const targetRadius = getNodeRadius(d.target, incomingEdgeCounts)
+					return d.target.y - (delta.dy * (targetRadius + 5)) / delta.length
+				})
+			node.attr('transform', d => `translate(${d.x},${d.y})`)
+		}
 
-        function dragended(event, d) {
-            if (!event.active) simulation.alphaTarget(0);
-        }
+		simulation.nodes(data.nodes).on('tick', ticked)
+		simulation.force('link').links(linksData)
+		simulation.alpha(1).restart()
+	}
 
-        function filterNodes(searchTerm) {
-            searchTerm = searchTerm.toLowerCase();
+	function computeDelta (d) {
+		const dx = d.target.x - d.source.x
+		const dy = d.target.y - d.source.y
+		const length = Math.sqrt(dx * dx + dy * dy) || 1
+		return { dx, dy, length }
+	}
 
-            // Filter nodes based on search term
-            const filteredNodes = searchTerm === "" 
-                ? graphData.nodes 
-                : graphData.nodes.filter(d => d.name.toLowerCase().includes(searchTerm));
+	function getNodeRadius (node, counts) {
+		const baseRadius = 5
+		const count = counts[node.id] || 0
+		return baseRadius + (count * 2)
+	}
 
-            // Get indices of filtered nodes for edge filtering
-            const filteredIndices = new Set(filteredNodes.map((_, i) => i));
+	function getNodeColor (node, counts) {
+		const count = counts[node.id] || 0
+		if (count === 0) return '#69b3a2'
+		if (count < 3) return '#3498db'
+		if (count < 5) return '#e67e22'
+		return '#e74c3c'
+	}
 
-            // Filter edges to only include connections between visible nodes
-            const filteredEdges = searchTerm === ""
-                ? graphData.edges
-                : graphData.edges.filter(d => 
-                    filteredIndices.has(d[0]) && filteredIndices.has(d[1]));
+	function dragstarted (event, d) {
+		if (!event.active) simulation.alphaTarget(0.3).restart()
+		d.fx = d.x
+		d.fy = d.y
+	}
+	function dragged (event, d) {
+		d.fx = event.x
+		d.fy = event.y
+	}
+	function dragended (event, d) {
+		if (!event.active) simulation.alphaTarget(0)
+	}
 
-            // Clear existing graph
-            g.selectAll("*").remove();
+	function formatProps (props) {
+		return Object.entries(props)
+			.map(([prop, count]) => `${prop}(${count})`)
+			.join(', ')
+	}
 
-            // Create filtered graph data
-            const filteredData = {
-                nodes: filteredNodes,
-                edges: filteredEdges
-            };
+	// Updates the search results container with matching node info.
+	function updateSearchResults (term) {
+		const container = getOrCreateSearchResultsContainer()
+		container.innerHTML = ''
+		if (term !== '') {
+			const matchingNodes = graphData.nodes.filter(n => n.name.toLowerCase().includes(term))
+			if (matchingNodes.length > 0) {
+				const list = document.createElement('ul')
+				matchingNodes.forEach(n => {
+					const li = document.createElement('li')
+					li.innerHTML = `<strong>${n.name}</strong> - ${n.file_path} - Props: ${formatProps(n.prop_usage)}`
+					li.style.cursor = 'pointer'
+					// When clicked, zoom to the node.
+					li.addEventListener('click', () => zoomToNode(n))
+					list.appendChild(li)
+				})
+				container.appendChild(list)
+			} else {
+				container.innerHTML = '<em>No matching nodes found</em>'
+			}
+			container.style.display = 'block'
+		} else {
+			container.style.display = 'none'
+		}
+	}
 
-            // Rerender the graph with filtered data
-            renderGraph(filteredData);
-        }
+	// Gets or creates the search results container underneath the search input.
+	function getOrCreateSearchResultsContainer () {
+		let container = document.getElementById('search-results')
+		if (!container) {
+			container = document.createElement('div')
+			container.id = 'search-results'
+			// Basic styling – adjust as needed
+			container.style.marginTop = '10px'
+			container.style.maxHeight = '200px'
+			container.style.overflowY = 'auto'
+			container.style.backgroundColor = '#fff'
+			container.style.border = '1px solid #ccc'
+			container.style.padding = '10px'
+			container.style.borderRadius = '4px'
+			// Append to the search container
+			const searchContainer = document.querySelector('.search-container')
+			if (searchContainer) {
+				searchContainer.appendChild(container)
+			} else {
+				document.body.appendChild(container)
+			}
+		}
+		return container
+	}
 
-        function showTooltip(event, d) {
-            tooltip.transition()
-                .duration(200)
-                .style("opacity", .9);
-            const edgeCount = incomingEdges[d.index] || 0;
-            tooltip.html(`Path: ${d.file_path}<br/>Props: ${Object.entries(d.prop_usage).map(([prop, count]) => `${prop}(${count})`).join(', ')}<br/>Incoming Edges: ${edgeCount}`)
-                .style("left", (event.pageX + 10) + "px")
-                .style("top", (event.pageY - 28) + "px");
-        }
+	// Zooms into the given node by centering it and applying a scale.
+	function zoomToNode (node) {
+		const scale = 2 // adjust as needed
+		const transform = d3.zoomIdentity
+			.translate(width / 2, height / 2)
+			.scale(scale)
+			.translate(-node.x, -node.y)
+		svg.transition().duration(750).call(zoom.transform, transform)
+	}
 
-        function hideTooltip() {
-            tooltip.transition()
-                .duration(500)
-                .style("opacity", 0);
-        }
+	function handleKeydown (e) {
+		if (e.key === '/' && !e.ctrlKey && !e.metaKey) {
+			e.preventDefault()
+			document.querySelector('.search-input').focus()
+		}
+		if (e.key === 'Escape') {
+			const input = document.querySelector('.search-input')
+			input.value = ''
+			window.filterNodes('')
+		}
+	}
 
-        document.addEventListener('keydown', function(e) {
-            // Press '/' to focus search
-            if (e.key === '/' && !e.ctrlKey && !e.metaKey) {
-                e.preventDefault();
-                document.querySelector('.search-input').focus();
-            }
-            // Press 'Escape' to clear search
-            if (e.key === 'Escape') {
-                document.querySelector('.search-input').value = '';
-                filterNodes('');
-            }
-        });
+	function cloneAndPrepareSvg (svgElement, bbox) {
+		const clonedSvg = svgElement.cloneNode(true)
+		const styleElement = document.createElement('style')
+		styleElement.textContent = `
+			.node {
+				stroke: #fff;
+				stroke-width: 1.5px;
+			}
+			.link {
+				stroke: #999;
+				stroke-opacity: 0.6;
+				stroke-width: 1px;
+			}
+			.node text {
+				font-size: 12px;
+				font-family: Arial, sans-serif;
+			}
+			marker#arrowhead path {
+				fill: #999;
+			}
+		`
+		clonedSvg.insertBefore(styleElement, clonedSvg.firstChild)
+		clonedSvg.setAttribute('width', bbox.width + bbox.x * 2)
+		clonedSvg.setAttribute('height', bbox.height + bbox.y * 2)
+		clonedSvg.setAttribute('viewBox', `${bbox.x} ${bbox.y} ${bbox.width + bbox.x} ${bbox.height + bbox.y}`)
+		return clonedSvg
+	}
 
-        // Function to export as SVG
-        function exportAsSVG() {
-            // Get the SVG element
-            const svgElement = document.querySelector('svg');
-            
-            // Deep clone the SVG to avoid modifying the original
-            const clonedSvg = svgElement.cloneNode(true);
-            
-            // Add necessary styles inline
-            const styleElement = document.createElement('style');
-            styleElement.textContent = `
-                .node {
-                    stroke: #fff;
-                    stroke-width: 1.5px;
-                }
-                .link {
-                    stroke: #999;
-                    stroke-opacity: 0.6;
-                    stroke-width: 1px;
-                }
-                .node text {
-                    font-size: 12px;
-                    font-family: Arial, sans-serif;
-                }
-                marker#arrowhead path {
-                    fill: #999;
-                }
-            `;
-            clonedSvg.insertBefore(styleElement, clonedSvg.firstChild);
-            
-            // Ensure the SVG has the correct size attributes
-            const bbox = svgElement.getBBox();
-            clonedSvg.setAttribute('width', bbox.width + bbox.x * 2);
-            clonedSvg.setAttribute('height', bbox.height + bbox.y * 2);
-            clonedSvg.setAttribute('viewBox', `${bbox.x} ${bbox.y} ${bbox.width + bbox.x} ${bbox.height + bbox.y}`);
-            
-            // Get the SVG source with the added styles
-            const serializer = new XMLSerializer();
-            const source = serializer.serializeToString(clonedSvg);
-            
-            // Add XML declaration and SVG namespace
-            const svgData = '<?xml version="1.0" standalone="no"?>\r\n' + source;
-            
-            // Create Blob and download
-            const svgBlob = new Blob([svgData], { type: 'image/svg+xml;charset=utf-8' });
-            const svgUrl = URL.createObjectURL(svgBlob);
-            
-            // Create download link
-            const downloadLink = document.createElement('a');
-            downloadLink.href = svgUrl;
-            downloadLink.download = 'component-graph.svg';
-            document.body.appendChild(downloadLink);
-            downloadLink.click();
-            document.body.removeChild(downloadLink);
-            
-            // Clean up
-            URL.revokeObjectURL(svgUrl);
-        }
+	function exportSvg (svgElement) {
+		const bbox = svgElement.getBBox()
+		const clonedSvg = cloneAndPrepareSvg(svgElement, bbox)
+		const serializer = new XMLSerializer()
+		const source = serializer.serializeToString(clonedSvg)
+		const svgData = '<?xml version="1.0" standalone="no"?>\r\n' + source
+		const blob = new Blob([svgData], { type: 'image/svg+xml;charset=utf-8' })
+		const url = URL.createObjectURL(blob)
+		const link = document.createElement('a')
+		link.href = url
+		link.download = 'component-graph.svg'
+		document.body.appendChild(link)
+		link.click()
+		document.body.removeChild(link)
+		URL.revokeObjectURL(url)
+	}
 
-        // Function to export as PNG
-        function exportAsPNG() {
-            // Get the SVG element
-            const svgElement = document.querySelector('svg');
-            
-            // Get the SVG dimensions
-            const bbox = svgElement.getBBox();
-            const width = bbox.width + bbox.x * 2;
-            const height = bbox.height + bbox.y * 2;
-            
-            // Create a canvas element
-            const canvas = document.createElement('canvas');
-            const ctx = canvas.getContext('2d');
-            
-            // Set canvas size to match SVG
-            canvas.width = width;
-            canvas.height = height;
-            
-            // Clone and prepare SVG for export (similar to SVG export)
-            const clonedSvg = svgElement.cloneNode(true);
-            const styleElement = document.createElement('style');
-            styleElement.textContent = `
-                .node {
-                    stroke: #fff;
-                    stroke-width: 1.5px;
-                }
-                .link {
-                    stroke: #999;
-                    stroke-opacity: 0.6;
-                    stroke-width: 1px;
-                }
-                .node text {
-                    font-size: 12px;
-                    font-family: Arial, sans-serif;
-                }
-                marker#arrowhead path {
-                    fill: #999;
-                }
-            `;
-            clonedSvg.insertBefore(styleElement, clonedSvg.firstChild);
-            clonedSvg.setAttribute('width', width);
-            clonedSvg.setAttribute('height', height);
-            clonedSvg.setAttribute('viewBox', `${bbox.x} ${bbox.y} ${bbox.width + bbox.x} ${bbox.height + bbox.y}`);
-            
-            // Create an image from the SVG
-            const image = new Image();
-            const svgData = new XMLSerializer().serializeToString(clonedSvg);
-            const svgBlob = new Blob([svgData], { type: 'image/svg+xml;charset=utf-8' });
-            const svgUrl = URL.createObjectURL(svgBlob);
-            
-            image.onload = function() {
-                // Draw the image on the canvas
-                ctx.fillStyle = 'white';
-                ctx.fillRect(0, 0, width, height);
-                ctx.drawImage(image, 0, 0);
-                
-                // Convert canvas to PNG and download
-                const pngUrl = canvas.toDataURL('image/png');
-                const downloadLink = document.createElement('a');
-                downloadLink.href = pngUrl;
-                downloadLink.download = 'component-graph.png';
-                document.body.appendChild(downloadLink);
-                downloadLink.click();
-                document.body.removeChild(downloadLink);
-                
-                // Clean up
-                URL.revokeObjectURL(svgUrl);
-            };
-            
-            image.src = svgUrl;
-        }
+	function exportPng (svgElement) {
+		const bbox = svgElement.getBBox()
+		const width = bbox.width + bbox.x * 2
+		const height = bbox.height + bbox.y * 2
+		const canvas = document.createElement('canvas')
+		canvas.width = width
+		canvas.height = height
+		const ctx = canvas.getContext('2d')
+		const clonedSvg = cloneAndPrepareSvg(svgElement, bbox)
+		const serializer = new XMLSerializer()
+		const svgData = serializer.serializeToString(clonedSvg)
+		const blob = new Blob([svgData], { type: 'image/svg+xml;charset=utf-8' })
+		const url = URL.createObjectURL(blob)
+		const image = new Image()
+		image.onload = function () {
+			ctx.fillStyle = 'white'
+			ctx.fillRect(0, 0, width, height)
+			ctx.drawImage(image, 0, 0)
+			const pngUrl = canvas.toDataURL('image/png')
+			const link = document.createElement('a')
+			link.href = pngUrl
+			link.download = 'component-graph.png'
+			document.body.appendChild(link)
+			link.click()
+			document.body.removeChild(link)
+			URL.revokeObjectURL(url)
+		}
+		image.src = url
+	}
+})()
+
+
+
+
     </script>
 </body>
 </html> 
