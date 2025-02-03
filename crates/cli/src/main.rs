@@ -2,7 +2,7 @@ use clap::Parser;
 use spinne_logger::Logger;
 use std::{fs::File, path::PathBuf};
 
-use spinne_core::Project;
+use spinne_core::Workspace;
 use spinne_html::HtmlGenerator;
 
 #[derive(Parser, Debug)]
@@ -49,8 +49,16 @@ fn main() -> std::io::Result<()> {
 
     let absolute_entry = std::fs::canonicalize(&args.entry)?;
 
-    let mut project = Project::new(absolute_entry);
-    project.traverse(&args.exclude, &args.include);
+    let mut workspace = Workspace::new(absolute_entry);
+    workspace.discover_projects();
+    workspace.traverse_projects(&args.exclude, &args.include);
+
+    // Create a serializable structure containing all project graphs
+    let workspace_data = workspace
+        .get_projects()
+        .iter()
+        .map(|project| project.component_graph.to_serializable())
+        .collect::<Vec<_>>();
 
     // output to json file in current working directory
     if args.format == Format::File {
@@ -63,13 +71,15 @@ fn main() -> std::io::Result<()> {
         ));
 
         let file = File::create(output_path_with_extension)?;
-        serde_json::to_writer_pretty(file, &project.component_graph.to_serializable())?;
+        serde_json::to_writer_pretty(file, &workspace_data)?;
     }
 
     // output to console
     if args.format == Format::Console {
         Logger::info("Printing report to console:");
-        project.component_graph.print_graph();
+        for (i, project_graph) in workspace_data.iter().enumerate() {
+            println!("Project {}: {:#?}", i + 1, project_graph);
+        }
     }
 
     // output to html file in current working directory
@@ -82,7 +92,9 @@ fn main() -> std::io::Result<()> {
             output_path_with_extension
         ));
 
-        let graph_data = serde_json::json!(project.component_graph.to_serializable());
+        let graph_data = serde_json::json!({
+            "projects": workspace_data
+        });
 
         match HtmlGenerator::new(graph_data).save(&output_path_with_extension) {
             Ok(_) => Logger::info(&format!(

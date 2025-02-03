@@ -3,30 +3,28 @@ use predicates::prelude::*;
 use std::fs;
 use tempfile::TempDir;
 
-fn create_mock_project(files: Vec<(&str, &str)>) -> TempDir {
+pub fn create_mock_project(files: &Vec<(&str, &str)>) -> TempDir {
     let temp_dir = TempDir::new().unwrap();
     let root = temp_dir.path();
 
-    // Create a nested directory structure
-    fs::create_dir_all(root.join("src/components")).unwrap();
-    fs::create_dir_all(root.join("src/pages")).unwrap();
-
     // Create mock .tsx files
     for (path, content) in files {
+        // create directories before creating files
         let file_path = root.join(path);
+        if let Some(parent) = file_path.parent() {
+            if parent != root {
+                fs::create_dir_all(parent).unwrap();
+            }
+        }
         fs::write(file_path, content).unwrap();
     }
-
-    // Create non-tsx files
-    fs::write(root.join("README.md"), "# Mock Project").unwrap();
-    fs::write(root.join("package.json"), r#"{"name": "mock-project"}"#).unwrap();
 
     temp_dir
 }
 
 #[test]
 fn test_cli_with_default_output() {
-    let temp_dir = create_mock_project(vec![(
+    let temp_dir = create_mock_project(&vec![(
         "src/components/Button.tsx",
         "export const Button = () => { return <button>Click me</button>; }",
     )]);
@@ -43,10 +41,14 @@ fn test_cli_with_default_output() {
 
 #[test]
 fn test_cli_with_console_output() {
-    let temp_dir = create_mock_project(vec![(
-        "src/components/Button.tsx",
-        "export const Button = () => { return <button>Click me</button>; }",
-    )]);
+    let temp_dir = create_mock_project(&vec![
+        (".git/HEAD", "ref: refs/heads/main"),
+        ("package.json", r#"{"name": "mock-project"}"#),
+        (
+            "src/components/Button.tsx",
+            "export const Button = () => { return <button>Click me</button>; }",
+        ),
+    ]);
     let mut cmd = Command::cargo_bin("spinne").unwrap();
 
     cmd.current_dir(temp_dir.path())
@@ -63,7 +65,9 @@ fn test_cli_with_console_output() {
 
 #[test]
 fn test_cli_with_ignore_option() {
-    let temp_dir = create_mock_project(vec![
+    let temp_dir = create_mock_project(&vec![
+        (".git/HEAD", "ref: refs/heads/main"),
+        ("package.json", r#"{"name": "mock-project"}"#),
         ("src/components/Button.tsx", "export const Button = () => { return <button>Click me</button>; }"),
         ("src/pages/Home.tsx", "import { Header } from '../components/Header'; export const Home = () => { return <div><Header /><main>Welcome</main></div>; }"),
         ("src/components/Header.tsx", "export const Header = () => { return <header>Header</header>; }"),
@@ -94,7 +98,9 @@ fn test_cli_with_nonexistent_directory() {
 
 #[test]
 fn test_cli_with_ignore_multiple_directories() {
-    let temp_dir = create_mock_project(vec![
+    let temp_dir = create_mock_project(&vec![
+        (".git/HEAD", "ref: refs/heads/main"),
+        ("package.json", r#"{"name": "mock-project"}"#),
         ("src/components/Button.tsx", "export const Button = () => { return <button>Click me</button>; }"),
         ("src/components/Header.tsx", "import { Button } from './Button'; export const Header = () => { return <header><Button /></header>; }"),
         ("src/pages/Home.tsx", "import { Header } from '../components/Header'; export const Home = () => { return <div><Header /><main>Welcome</main></div>; }"),
@@ -117,7 +123,10 @@ fn test_cli_with_ignore_multiple_directories() {
 
 #[test]
 fn test_cli_with_include_option() {
-    let temp_dir = create_mock_project(vec![(
+    let temp_dir = create_mock_project(&vec![
+        (".git/HEAD", "ref: refs/heads/main"),
+        ("package.json", r#"{"name": "mock-project"}"#),
+        (
         "src/components/Button.tsx",
         "export const Button = () => { return <button>Click me</button>; }",
     ), (
@@ -143,7 +152,10 @@ fn test_cli_with_include_option() {
 
 #[test]
 fn test_cli_with_html_output() {
-    let temp_dir = create_mock_project(vec![(
+    let temp_dir = create_mock_project(&vec![
+        (".git/HEAD", "ref: refs/heads/main"),
+        ("package.json", r#"{"name": "mock-project"}"#),
+        (
         "src/components/Button.tsx",
         "export const Button = () => { return <button>Click me</button>; }",
     ), (

@@ -48,38 +48,34 @@ mod tests {
     #[test]
     fn test_html() {
         let graph_data = json!({
-            "nodes": [
+            "projects": [
                 {
-                    "name": "ComponentA",
-                    "file_path": "/path/to/ComponentA.tsx",
-                    "prop_usage": {}
+                    "nodes": [
+                        {
+                            "name": "ComponentA",
+                            "file_path": "/path/to/ComponentA.tsx",
+                            "prop_usage": {}
+                        },
+                        {
+                            "name": "ComponentB",
+                            "file_path": "/path/to/ComponentB.tsx",
+                            "prop_usage": {}
+                        }
+                    ],
+                    "edges": [
+                        [0, 1]
+                    ]
                 },
                 {
-                    "name": "ComponentB",
-                    "file_path": "/path/to/ComponentB.tsx",
-                    "prop_usage": {}
-                },
-                {
-                    "name": "ComponentC",
-                    "file_path": "/path/to/ComponentC.tsx",
-                    "prop_usage": {}
-                },
-                {
-                    "name": "ComponentD",
-                    "file_path": "/path/to/ComponentD.tsx",
-                    "prop_usage": {}
-                },
-                {
-                    "name": "ComponentE",
-                    "file_path": "/path/to/ComponentE.tsx",
-                    "prop_usage": {}
+                    "nodes": [
+                        {
+                            "name": "ComponentC",
+                            "file_path": "/path/to/ComponentC.tsx",
+                            "prop_usage": {}
+                        }
+                    ],
+                    "edges": []
                 }
-            ],
-            "edges": [
-                [0, 1],
-                [2, 1],
-                [3, 1],
-                [3, 4]
             ]
         });
 
