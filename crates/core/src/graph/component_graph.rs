@@ -24,29 +24,38 @@ pub struct SerializableComponentGraph {
     pub edges: Vec<(usize, usize)>,
 }
 
+/// Represents a graph of components and their relationships.
 impl ComponentGraph {
+    /// Creates a new empty ComponentGraph.
     pub fn new() -> Self {
         Self {
             graph: Graph::new(),
         }
     }
 
+    /// Checks if a component exists in the graph.
+    /// A component is uniquely identified by its name and file path.
     pub fn has_component(&self, key: &str, file_path: &PathBuf) -> bool {
         self.graph
             .node_indices()
             .any(|i| self.graph[i].name == key && self.graph[i].file_path == *file_path)
     }
 
+    /// Checks if an edge exists between two components.
     pub fn has_edge(&self, from: NodeIndex, to: NodeIndex) -> bool {
         self.graph.contains_edge(from, to)
     }
 
+    /// Tries to find the index of a component in the graph.
     pub fn get_component(&self, key: &str, file_path: &PathBuf) -> Option<NodeIndex> {
         self.graph
             .node_indices()
             .find(|i| self.graph[*i].name == key && self.graph[*i].file_path == *file_path)
     }
 
+    /// Adds a new component to the graph.
+    /// If the component already exists, it returns the existing component's index.
+    /// Otherwise, it adds a new component and returns the index of the new component.
     pub fn add_component(&mut self, key: String, file_path: PathBuf) -> NodeIndex {
         if !self.has_component(&key, &file_path) {
             Logger::debug(
@@ -71,6 +80,7 @@ impl ComponentGraph {
         }
     }
 
+    /// Adds a child edge between two components.
     pub fn add_child(&mut self, parent: (&str, &PathBuf), child: (&str, &PathBuf)) {
         let parent_index = self.get_or_add_component(parent.0, parent.1.clone());
         let child_index = self.get_or_add_component(child.0, child.1.clone());
@@ -82,6 +92,8 @@ impl ComponentGraph {
         self.graph.add_edge(parent_index, child_index, ());
     }
 
+    /// Tries to find the index of a component in the graph.
+    /// If the component does not exist, it adds a new component and returns the index of the new component.
     fn get_or_add_component(&mut self, name: &str, file_path: PathBuf) -> NodeIndex {
         match self.get_component(name, &file_path) {
             Some(index) => index,
@@ -89,6 +101,8 @@ impl ComponentGraph {
         }
     }
 
+    /// Adds a prop usage to a component.
+    /// If the component does not exist, it does nothing.
     pub fn add_prop_usage(&mut self, component: &str, file_path: &PathBuf, prop: String) {
         if let Some(node_index) = self.get_component(component, file_path) {
             let component = &mut self.graph[node_index];
@@ -101,10 +115,13 @@ impl ComponentGraph {
         }
     }
 
+    /// Prints the graph to the console.
     pub fn print_graph(&self) {
         println!("{:?}", self.graph);
     }
 
+    /// Converts the graph to a serializable format.
+    /// This can be used to save the graph to a file or to send it over the network.
     pub fn to_serializable(&self) -> SerializableComponentGraph {
         let nodes: Vec<Component> = self
             .graph
@@ -128,6 +145,8 @@ impl ComponentGraph {
         SerializableComponentGraph { nodes, edges }
     }
 
+    /// Converts a serializable graph back to a ComponentGraph.
+    /// This can be used to load a graph from a file or to receive it over the network.
     pub fn from_serializable(serializable: SerializableComponentGraph) -> Self {
         let mut graph = Graph::new();
         let node_indices: Vec<NodeIndex> = serializable

@@ -52,6 +52,8 @@ impl<'a> Visit<'a> for ComponentExportVisitor<'a> {
     }
 }
 
+/// Tries to find the root file where a component is defined.
+/// This is done by following the import declarations and looking for the component name in the export statements.
 pub fn find_component_root(
     semantic: &Semantic,
     resolver: &ProjectResolver,
