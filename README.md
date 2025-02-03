@@ -20,31 +20,47 @@ Spinne is a CLI Tool, that analyzes react projects, and creates a component grap
 
 ## Example
 
+Spinne can analyze both single React projects and workspaces containing multiple projects. Here's an example output showing component relationships across multiple projects:
+
 ```json
-{
-  "nodes": [
-    {
-      "name": "ButtonGroup",
-      "file_path": "my-project/src/components/Button/ButtonGroup.tsx",
-      "prop_usage": {}
-    },
-    {
-      "name": "MyComponent",
-      "file_path": "my-project/src/components/MyComponent.tsx",
-      "prop_usage": {}
+[
+  {
+    "name": "ui-components",
+    "graph": {
+      "nodes": [
+        {
+          "name": "Button",
+          "file_path": "packages/ui-components/src/components/Button.tsx",
+          "prop_usage": {}
+        },
+        {
+          "name": "ButtonGroup",
+          "file_path": "packages/ui-components/src/components/ButtonGroup.tsx",
+          "prop_usage": {}
+        }
+      ],
+      "edges": [
+        [1, 0]
+      ]
     }
-  ],
-  "edges": [
-    [
-      0,
-      1
-    ]
-  ]
-}
+  },
+  {
+    "name": "main-app",
+    "graph": {
+      "nodes": [
+        {
+          "name": "LoginForm",
+          "file_path": "packages/main-app/src/features/auth/LoginForm.tsx",
+          "prop_usage": {}
+        }
+      ],
+      "edges": [[0, 0]]
+    }
+  }
+]
 ```
 
-For the graph, we are using a directed adjacency graph, which means relationships between components are representated by edges, or weights.
-A '0' to '1' edge, would mean, that the first node, "ButtonGroup", uses the second node, "MyComponent", in the code of our project.
+For the graph, we use a directed adjacency graph where relationships between components are represented by edges. For example, an edge from ButtonGroup to Button (represented as `[1, 0]` in the edges array) means that ButtonGroup uses the Button component.
 
 ## Installation
 
@@ -62,29 +78,29 @@ To scan for components in your current directory:
 spinne
 ```
 
-This command will output the results in a file 'spinne-report.json' by default.
-If you want to output it directly to the console you can use `-o console`:
+This command will output the results in a file named 'spinne-report.json' by default.
+If you want to output it directly to the console you can use `-f console`:
 
 ```bash
-spinne -o console
+spinne -f console
 ```
 
-To output the results in a html format with a visualization of the component graph:
+To generate an interactive HTML visualization of the component graph:
 
 ```bash
 spinne -f html
 ```
+This will create 'spinne-report.html' and automatically open it in your default browser.
 
 ## Options
 
 | Option | Description | Options | Default |
 | --- | --- | --- | --- |
-| `-e, --entry <path>` | entry point directory | Path | current directory (./) |
-| `-f, --format <format>` | define the output format | `file`, `console`, `html` | file |
-| `-i, --ignore <path>` | define ignored folders | comma separated glob patterns | `**/node_modules/**,**/dist/**,**/build/**` |
-| `-l, --log-level <log-level>` | define the log level | the amount of -l used will define the log level | 0 |
-| `--include <include>` | define a glob pattern to include | comma separated glob patterns | `**/*.tsx` |
-| `--exclude <exclude>` | define a glob pattern to exclude | comma separated glob patterns | `**/node_modules/**,**/dist/**,**/build/**,**/*.stories.tsx,**/*.test.tsx` |
+| `-e, --entry <path>` | Entry point directory | Path | current directory (./) |
+| `-f, --format <format>` | Output format | `file`, `console`, `html` | `file` |
+| `--exclude <patterns>` | Glob patterns to exclude | comma separated patterns | `**/node_modules/**,**/dist/**,**/build/**,**/*.stories.tsx,**/*.test.tsx` |
+| `--include <patterns>` | Glob patterns to include | comma separated patterns | `**/*.tsx` |
+| `-l` | Verbosity level | Use multiple times (-l, -ll, etc.) | 0 |
 
 ## Configuration File
 
@@ -106,3 +122,29 @@ Example `spinne.json`:
 | `exclude` | Array of glob patterns for files to exclude from the analysis | `string[]` |
 
 The configuration file options will be merged with any command line arguments you provide. For example, if you specify both exclude patterns in your `spinne.json` and via the `--exclude` flag, both sets of patterns will be used.
+
+## Workspace Support
+
+Spinne automatically detects and analyzes all React projects within a workspace. A project is identified by the presence of both a `package.json` file and a `.git` directory. This means Spinne can:
+
+- Handle projects in subdirectories
+- Process multiple independent projects in a directory structure
+
+When analyzing a workspace:
+1. Spinne first discovers all valid React projects in the directory tree
+2. Each project is analyzed independently
+3. Component relationships are tracked per project
+4. Results are aggregated in the final output
+
+You can run Spinne at any level of your directory structure:
+- Run it in a specific project directory to analyze just that project
+- Run it in a workspace root to analyze all contained projects
+- Run it in any parent directory to discover and analyze all projects beneath it
+
+```bash
+# Analyze a specific project
+cd my-project && spinne
+
+# Analyze multiple projects from a parent directory
+cd dev/projects && spinne
+```
