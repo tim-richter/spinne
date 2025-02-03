@@ -124,18 +124,27 @@
         <button class="export-button" onclick="exportAsPNG()">Export PNG</button>
     </div>
     <div id="graph"></div>
+
     <script>
         (function initComponentGraph () {
-            const projectsData = {"projects":[{"nodes":[{"name":"ComponentA","file_path":"/path/to/ComponentA.tsx","prop_usage":{}},{"name":"ComponentB","file_path":"/path/to/ComponentB.tsx","prop_usage":{}}],"edges":[[0,1]]},{"nodes":[{"name":"ComponentC","file_path":"/path/to/ComponentC.tsx","prop_usage":{}}],"edges":[]}]}.projects;
+            const projectsData = {"projects":[{"nodes":[{"name":"ComponentA","file_path":"/path/to/ComponentA.tsx","prop_usage":{}},{"name":"ComponentB","file_path":"/path/to/ComponentB.tsx","prop_usage":{}}],"edges":[[0,1]]},{"nodes":[{"name":"ComponentC","file_path":"/path/to/ComponentC.tsx","prop_usage":{}}],"edges":[]}]};
             let currentProjectIndex = 0
             let simulation = null
+
+						const width = window.innerWidth
+						const height = window.innerHeight
+
+						let svg = createSvg(width, height)
+						let g = svg.append('g')
+						// Store zoom behavior so we can programmatically transform
+						let zoom = setupZoom(svg, g)
 
             // Initialize project selector
             const projectSelector = document.querySelector('.project-selector')
             projectsData.forEach((project, index) => {
                 const option = document.createElement('option')
-                option.value = index
-                option.text = `Project ${index + 1}`
+                option.value = index;
+                option.text = project.name;
                 projectSelector.appendChild(option)
             })
 
@@ -147,28 +156,24 @@
                 }
                 // Clear existing graph
                 d3.select('#graph').select('svg').remove()
+								svg = createSvg(width, height)
+								g = svg.append('g')
+								zoom = setupZoom(svg, g)
                 // Initialize new graph with selected project data
                 initGraph(projectsData[currentProjectIndex])
             }
 
             function initGraph(graphData) {
                 // Assign a unique id (as a string) to each node
-                graphData.nodes.forEach((node, i) => {
+                graphData.graph.nodes.forEach((node, i) => {
                     node.id = String(i)
                 })
 
-                const width = window.innerWidth
-                const height = window.innerHeight
-
-                const incomingEdgeCounts = calculateIncomingEdgeCounts(graphData.edges)
-                const svg = createSvg(width, height)
-                const g = svg.append('g')
+                const incomingEdgeCounts = calculateIncomingEdgeCounts(graphData.graph.edges)
                 const tooltip = createTooltip()
 
-                // Store zoom behavior so we can programmatically transform
-                const zoom = setupZoom(svg, g)
                 addArrowheadMarker(svg)
-                simulation = createSimulation(width, height, graphData.nodes, graphData.edges)
+                simulation = createSimulation(width, height, graphData.graph.nodes, graphData.graph.edges)
                 renderGraph(graphData, { svg, g, simulation, tooltip, incomingEdgeCounts })
             }
 
@@ -264,8 +269,8 @@
             function renderGraph (data, context) {
                 const { simulation, g, tooltip, incomingEdgeCounts } = context
                 // Map node ids to objects for link resolution.
-                const nodeById = new Map(data.nodes.map(n => [n.id, n]))
-                const linksData = data.edges.map(edge => ({
+                const nodeById = new Map(data.graph.nodes.map(n => [n.id, n]))
+                const linksData = data.graph.edges.map(edge => ({
                     source: nodeById.get(String(edge[0])),
                     target: nodeById.get(String(edge[1]))
                 }))
@@ -281,7 +286,7 @@
                 // Append node groups with class "node-group"
                 const node = g.append('g')
                     .selectAll('g')
-                    .data(data.nodes)
+                    .data(data.graph.nodes)
                     .enter()
                     .append('g')
                     .attr('class', 'node-group')
@@ -330,7 +335,7 @@
                     node.attr('transform', d => `translate(${d.x},${d.y})`)
                 }
 
-                simulation.nodes(data.nodes).on('tick', ticked)
+                simulation.nodes(data.graph.nodes).on('tick', ticked)
                 simulation.force('link').links(linksData)
                 simulation.alpha(1).restart()
             }
@@ -380,7 +385,7 @@
                 const container = getOrCreateSearchResultsContainer()
                 container.innerHTML = ''
                 if (term !== '') {
-                    const matchingNodes = currentProjectData.nodes.filter(n => n.name.toLowerCase().includes(term))
+                    const matchingNodes = currentProjectData.graph.nodes.filter(n => n.name.toLowerCase().includes(term))
                     if (matchingNodes.length > 0) {
                         const list = document.createElement('ul')
                         matchingNodes.forEach(n => {
@@ -478,6 +483,7 @@
             function exportSvg(svgElement) {
                 const svgNode = svgElement.node ? svgElement.node() : svgElement
                 const bbox = svgNode.getBBox()
+								debugger
                 const clonedSvg = cloneAndPrepareSvg(svgNode, bbox)
                 const serializer = new XMLSerializer()
                 const source = serializer.serializeToString(clonedSvg)

@@ -57,7 +57,12 @@ fn main() -> std::io::Result<()> {
     let workspace_data = workspace
         .get_projects()
         .iter()
-        .map(|project| project.component_graph.to_serializable())
+        .map(|project| {
+            serde_json::json!({
+                "name": project.project_name,
+                "graph": project.component_graph.to_serializable()
+            })
+        })
         .collect::<Vec<_>>();
 
     // output to json file in current working directory
@@ -77,8 +82,11 @@ fn main() -> std::io::Result<()> {
     // output to console
     if args.format == Format::Console {
         Logger::info("Printing report to console:");
-        for (i, project_graph) in workspace_data.iter().enumerate() {
-            println!("Project {}: {:#?}", i + 1, project_graph);
+        for project_data in workspace_data.iter() {
+            println!(
+                "Project '{}': {:#?}",
+                project_data["name"], project_data["graph"]
+            );
         }
     }
 
@@ -92,11 +100,9 @@ fn main() -> std::io::Result<()> {
             output_path_with_extension
         ));
 
-        let graph_data = serde_json::json!({
-            "projects": workspace_data
-        });
-
-        match HtmlGenerator::new(graph_data).save(&output_path_with_extension) {
+        match HtmlGenerator::new(serde_json::to_value(workspace_data).unwrap())
+            .save(&output_path_with_extension)
+        {
             Ok(_) => Logger::info(&format!(
                 "Report written to: {:?}",
                 output_path_with_extension

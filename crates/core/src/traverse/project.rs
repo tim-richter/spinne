@@ -18,8 +18,8 @@ use super::ProjectResolver;
 /// Represents a project and its components.
 /// A Project is typically a repository with a package.json file.
 pub struct Project {
-    project_root: PathBuf,
-    project_name: String,
+    pub project_root: PathBuf,
+    pub project_name: String,
     pub component_graph: ComponentGraph,
     resolver: ProjectResolver,
     config: Option<ConfigValues>,
