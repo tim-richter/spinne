@@ -85,3 +85,24 @@ spinne -f html
 | `-l, --log-level <log-level>` | define the log level | the amount of -l used will define the log level | 0 |
 | `--include <include>` | define a glob pattern to include | comma separated glob patterns | `**/*.tsx` |
 | `--exclude <exclude>` | define a glob pattern to exclude | comma separated glob patterns | `**/node_modules/**,**/dist/**,**/build/**,**/*.stories.tsx,**/*.test.tsx` |
+
+## Configuration File
+
+You can also configure Spinne using a `spinne.json` file in your project root. This file allows you to define persistent configuration options that will be used every time you run Spinne.
+
+Example `spinne.json`:
+```json
+{
+  "include": ["**/*.tsx", "**/*.ts"],
+  "exclude": ["**/node_modules/**", "**/dist/**", "**/*.test.tsx"]
+}
+```
+
+### Configuration Options
+
+| Option | Description | Type |
+| --- | --- | --- |
+| `include` | Array of glob patterns for files to include in the analysis | `string[]` |
+| `exclude` | Array of glob patterns for files to exclude from the analysis | `string[]` |
+
+The configuration file options will be merged with any command line arguments you provide. For example, if you specify both exclude patterns in your `spinne.json` and via the `--exclude` flag, both sets of patterns will be used.
