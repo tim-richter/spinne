@@ -1,19 +1,20 @@
 use std::{
+    collections::HashSet,
     fs,
     path::{Path, PathBuf},
-    sync::RwLock,
 };
 
-use ignore::{overrides::OverrideBuilder, DirEntry, Error, WalkBuilder, WalkParallel, WalkState};
+use ignore::{overrides::OverrideBuilder, Walk, WalkBuilder};
 use oxc_allocator::Allocator;
 use spinne_logger::Logger;
 
 use crate::{
-    analyze::react::analyzer::ReactAnalyzer, config::ConfigValues, parse::parse_tsx,
-    util::replace_absolute_path_with_project_name, ComponentGraph, Config, PackageJson,
+    analyze::react::analyzer::ReactAnalyzer, config::ConfigValues, graph::Component,
+    parse::parse_tsx, util::replace_absolute_path_with_project_name, ComponentGraph, Config,
+    PackageJson,
 };
 
-use super::ProjectResolver;
+use super::{PackageResolver, ProjectResolver};
 
 /// Represents a project and its components.
 /// A Project is typically a repository with a package.json file.
@@ -22,6 +23,7 @@ pub struct Project {
     pub project_name: String,
     pub component_graph: ComponentGraph,
     resolver: ProjectResolver,
+    package_resolver: PackageResolver,
     config: Option<ConfigValues>,
 }
 
@@ -42,7 +44,7 @@ impl Project {
             panic!("Project root is a file");
         }
 
-        let package_json = PackageJson::read(project_root.join("package.json"))
+        let package_json = PackageJson::read(&project_root.join("package.json"), false)
             .expect("Failed to read package.json");
 
         let project_name = package_json.name.unwrap_or_else(|| {
@@ -64,6 +66,7 @@ impl Project {
             project_name,
             component_graph: ComponentGraph::new(),
             resolver,
+            package_resolver: PackageResolver::new(),
             config,
         }
     }
@@ -104,27 +107,20 @@ impl Project {
         }
 
         let walker = self.build_walker(&exclude, &include);
-        // we have to use a RwLock here because we are traversing the project in parallel
-        let project = RwLock::new(self);
 
-        // starting the traversal
-        walker.run(|| {
-            Box::new(|result: Result<DirEntry, Error>| {
-                match result {
-                    Ok(entry) => {
-                        let path = entry.path();
+        for entry in walker {
+            match entry {
+                Ok(entry) => {
+                    let path = entry.path();
 
-                        if path.is_file() {
-                            Logger::debug(&format!("Analyzing file: {}", path.display()), 2);
-                            project.write().unwrap().analyze_file(&path);
-                        }
+                    if path.is_file() {
+                        Logger::debug(&format!("Analyzing file: {}", path.display()), 2);
+                        self.analyze_file(&path);
                     }
-                    Err(e) => Logger::error(&format!("Error while walking file: {}", e)),
                 }
-
-                WalkState::Continue
-            })
-        });
+                Err(e) => Logger::error(&format!("Error while walking file: {}", e)),
+            }
+        }
     }
 
     /// Builds a walker with correct overrides and patterns.
@@ -133,7 +129,7 @@ impl Project {
     ///
     /// - `exclude`: A list of patterns to exclude from the traversal.
     /// - `include`: A list of patterns to include in the traversal.
-    fn build_walker(&self, exclude: &Vec<String>, include: &Vec<String>) -> WalkParallel {
+    fn build_walker(&self, exclude: &Vec<String>, include: &Vec<String>) -> Walk {
         let exclude_patterns: Vec<String> = exclude
             .iter()
             .map(|pattern| format!("!{}", pattern)) // Add '!' to each pattern
@@ -155,7 +151,7 @@ impl Project {
         WalkBuilder::new(&self.project_root)
             .git_ignore(true)
             .overrides(overrides)
-            .build_parallel()
+            .build()
     }
 
     /// Analyzes a file and adds the found components to the component graph.
@@ -186,32 +182,63 @@ impl Project {
 
         let (_parser_ret, semantic_ret) = result.unwrap();
 
-        let react_analyzer = ReactAnalyzer::new(&semantic_ret.semantic, path_buf, &self.resolver);
+        let mut react_analyzer = ReactAnalyzer::new(
+            &semantic_ret.semantic,
+            path_buf,
+            &self.resolver,
+            &self.package_resolver,
+        );
         let components = react_analyzer.analyze();
 
         for component in components {
             let path_relative = replace_absolute_path_with_project_name(
                 self.project_root.clone(),
                 component.file_path.clone(),
-                &self.project_name,
+                self.project_name.clone(),
             );
 
+            // Create base component
+            let base_component = Component::new(
+                component.name.clone(),
+                component.file_path.clone(),
+                path_relative.clone(),
+                self.project_name.clone(),
+            );
+
+            // Create child components
+            let child_components: Vec<Component> = component
+                .children
+                .into_iter()
+                .map(|child| {
+                    let child_path_relative = replace_absolute_path_with_project_name(
+                        self.project_root.clone(),
+                        child.origin_file_path.clone(),
+                        self.project_name.clone(),
+                    );
+                    Component::new(
+                        child.name,
+                        child.origin_file_path,
+                        child_path_relative,
+                        self.project_name.clone(),
+                    )
+                })
+                .collect();
+
+            // Add everything to the graph in one operation
             self.component_graph
-                .add_component(component.name.clone(), path_relative.clone());
-
-            for child in component.children {
-                let child_path_relative = replace_absolute_path_with_project_name(
-                    self.project_root.clone(),
-                    child.origin_file_path.clone(),
-                    &self.project_name,
-                );
-
-                self.component_graph.add_child(
-                    (&component.name, &path_relative),
-                    (&child.name, &child_path_relative),
-                );
-            }
+                .add_component_with_deps(base_component, child_components);
         }
+    }
+
+    /// Gets all dependencies of the project from package.json
+    pub fn get_dependencies(&self) -> Option<HashSet<String>> {
+        PackageJson::read(&self.project_root.join("package.json"), true)
+            .and_then(|package_json| package_json.get_all_dependencies())
+    }
+
+    pub fn find_dependency(&self, name: &str) -> Option<String> {
+        PackageJson::read(&self.project_root.join("package.json"), true)
+            .and_then(|package_json| package_json.find_dependency(name))
     }
 }
 
@@ -242,10 +269,12 @@ mod tests {
             &vec!["**/*.tsx".to_string(), "**/*.ts".to_string()],
         );
 
-        assert_eq!(project.component_graph.graph.node_count(), 1);
+        assert_eq!(project.component_graph.node_count(), 1);
+        println!("{:?}", project.component_graph);
         assert!(project
             .component_graph
-            .has_component("App", &PathBuf::from("test/src/index.tsx")));
+            .find_component("App", &temp_dir.path().to_path_buf().join("src/index.tsx"))
+            .is_some());
     }
 
     #[test]
@@ -277,24 +306,40 @@ mod tests {
             &vec!["**/*.tsx".to_string(), "**/*.ts".to_string()],
         );
 
-        assert_eq!(project.component_graph.graph.node_count(), 2);
+        assert_eq!(project.component_graph.node_count(), 2);
         assert!(project
             .component_graph
-            .has_component("App", &PathBuf::from("test/src/index.tsx")));
+            .find_component("App", &temp_dir.path().to_path_buf().join("src/index.tsx"))
+            .is_some());
         assert!(project
             .component_graph
-            .has_component("Button", &PathBuf::from("test/src/components/Button.tsx")));
+            .find_component(
+                "Button",
+                &temp_dir
+                    .path()
+                    .to_path_buf()
+                    .join("src/components/Button.tsx")
+            )
+            .is_some());
 
         // App has edge to Button
         assert!(project.component_graph.has_edge(
             project
                 .component_graph
-                .get_component("App", &PathBuf::from("test/src/index.tsx"))
-                .unwrap(),
+                .find_component("App", &temp_dir.path().to_path_buf().join("src/index.tsx"))
+                .unwrap()
+                .id,
             project
                 .component_graph
-                .get_component("Button", &PathBuf::from("test/src/components/Button.tsx"))
-                .unwrap(),
+                .find_component(
+                    "Button",
+                    &temp_dir
+                        .path()
+                        .to_path_buf()
+                        .join("src/components/Button.tsx")
+                )
+                .unwrap()
+                .id,
         ));
     }
 
@@ -330,24 +375,40 @@ mod tests {
             &vec!["**/*.tsx".to_string(), "**/*.ts".to_string()],
         );
 
-        assert_eq!(project.component_graph.graph.node_count(), 2);
+        assert_eq!(project.component_graph.node_count(), 2);
         assert!(project
             .component_graph
-            .has_component("App", &PathBuf::from("test/src/index.tsx")));
+            .find_component("App", &temp_dir.path().to_path_buf().join("src/index.tsx"))
+            .is_some());
         assert!(project
             .component_graph
-            .has_component("Button", &PathBuf::from("test/src/components/Button.tsx")));
+            .find_component(
+                "Button",
+                &temp_dir
+                    .path()
+                    .to_path_buf()
+                    .join("src/components/Button.tsx")
+            )
+            .is_some());
 
         // App has edge to Button
         assert!(project.component_graph.has_edge(
             project
                 .component_graph
-                .get_component("App", &PathBuf::from("test/src/index.tsx"))
-                .unwrap(),
+                .find_component("App", &temp_dir.path().to_path_buf().join("src/index.tsx"))
+                .unwrap()
+                .id,
             project
                 .component_graph
-                .get_component("Button", &PathBuf::from("test/src/components/Button.tsx"))
-                .unwrap(),
+                .find_component(
+                    "Button",
+                    &temp_dir
+                        .path()
+                        .to_path_buf()
+                        .join("src/components/Button.tsx")
+                )
+                .unwrap()
+                .id,
         ));
     }
 
@@ -383,28 +444,52 @@ mod tests {
             &vec!["**/*.tsx".to_string(), "**/*.ts".to_string()],
         );
 
-        assert_eq!(project.component_graph.graph.node_count(), 2);
-        assert!(project.component_graph.has_component(
-            "ButtonGroup",
-            &PathBuf::from("test/src/components/Button/ButtonGroup.tsx")
-        ));
+        assert_eq!(project.component_graph.node_count(), 2);
         assert!(project
             .component_graph
-            .has_component("Button", &PathBuf::from("test/src/components/Button.tsx")));
+            .find_component(
+                "ButtonGroup",
+                &temp_dir
+                    .path()
+                    .to_path_buf()
+                    .join("src/components/Button/ButtonGroup.tsx")
+            )
+            .is_some());
+        assert!(project
+            .component_graph
+            .find_component(
+                "Button",
+                &temp_dir
+                    .path()
+                    .to_path_buf()
+                    .join("src/components/Button.tsx")
+            )
+            .is_some());
 
         // ButtonGroup has edge to Button
         assert!(project.component_graph.has_edge(
             project
                 .component_graph
-                .get_component(
+                .find_component(
                     "ButtonGroup",
-                    &PathBuf::from("test/src/components/Button/ButtonGroup.tsx")
+                    &temp_dir
+                        .path()
+                        .to_path_buf()
+                        .join("src/components/Button/ButtonGroup.tsx")
                 )
-                .unwrap(),
+                .unwrap()
+                .id,
             project
                 .component_graph
-                .get_component("Button", &PathBuf::from("test/src/components/Button.tsx"))
-                .unwrap(),
+                .find_component(
+                    "Button",
+                    &temp_dir
+                        .path()
+                        .to_path_buf()
+                        .join("src/components/Button.tsx")
+                )
+                .unwrap()
+                .id,
         ));
     }
 
@@ -444,7 +529,7 @@ mod tests {
             &vec!["**/*.tsx".to_string(), "**/*.ts".to_string()],
         );
 
-        assert_eq!(project.component_graph.graph.node_count(), 1);
+        assert_eq!(project.component_graph.node_count(), 1);
     }
 
     #[test]
@@ -483,7 +568,7 @@ mod tests {
             &vec!["**/*.tsx".to_string(), "**/*.ts".to_string()],
         );
 
-        assert_eq!(project.component_graph.graph.node_count(), 0);
+        assert_eq!(project.component_graph.node_count(), 0);
     }
 
     #[test]
@@ -518,7 +603,7 @@ mod tests {
         let mut project = Project::new(temp_dir.path().to_path_buf());
         project.traverse(&vec![], &vec![]);
 
-        assert_eq!(project.component_graph.graph.node_count(), 1);
+        assert_eq!(project.component_graph.node_count(), 1);
     }
 
     #[test]
@@ -553,6 +638,6 @@ mod tests {
         let mut project = Project::new(temp_dir.path().to_path_buf());
         project.traverse(&vec![], &vec!["src/pages/Button.tsx".to_string()]);
 
-        assert_eq!(project.component_graph.graph.node_count(), 2);
+        assert_eq!(project.component_graph.node_count(), 2);
     }
 }

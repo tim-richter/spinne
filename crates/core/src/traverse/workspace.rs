@@ -1,4 +1,5 @@
 use ignore::{DirEntry, WalkBuilder};
+use petgraph::{algo::toposort, graph::NodeIndex, Graph};
 use spinne_logger::Logger;
 use std::path::PathBuf;
 
@@ -41,10 +42,32 @@ impl Workspace {
         Logger::info(&format!("Found {} projects", self.projects.len()));
     }
 
-    /// Traverses all discovered projects to analyze their components
+    /// Traverses all discovered projects to analyze their components in dependency order
     pub fn traverse_projects(&mut self, exclude: &Vec<String>, include: &Vec<String>) {
-        for project in &mut self.projects {
-            project.traverse(exclude, include);
+        // Build dependency graph
+        let dep_graph = self.build_dependency_graph();
+
+        // Get topological sort
+        match toposort(&dep_graph, None) {
+            Ok(sorted_projects) => {
+                Logger::info("Traversing projects in dependency order");
+                // Traverse in order
+                for node_idx in sorted_projects {
+                    let project_idx = dep_graph[node_idx];
+                    let project = &mut self.projects[project_idx];
+                    Logger::info(&format!("Traversing project: {}", project.project_name));
+                    project.traverse(exclude, include);
+                }
+            }
+            Err(_) => {
+                Logger::warn(
+                    "Circular dependencies detected, falling back to sequential traversal",
+                );
+                // Fallback to regular traversal
+                for project in &mut self.projects {
+                    project.traverse(exclude, include);
+                }
+            }
         }
     }
 
@@ -76,6 +99,32 @@ impl Workspace {
                 self.projects.push(project);
             }
         }
+    }
+
+    fn build_dependency_graph(&self) -> Graph<usize, ()> {
+        let mut graph = Graph::<usize, ()>::new();
+
+        // Add nodes for each project with their index
+        let node_indices: Vec<_> = (0..self.projects.len())
+            .map(|i| graph.add_node(i))
+            .collect();
+
+        // Add edges based on dependencies
+        for (i, project) in self.projects.iter().enumerate() {
+            if let Some(dep_name) = project.find_dependency("react") {
+                // Find the project index with this name
+                if let Some(dep_idx) = self
+                    .projects
+                    .iter()
+                    .position(|p| p.project_name == dep_name)
+                {
+                    // Add edge from dependent to dependency
+                    graph.add_edge(node_indices[i], node_indices[dep_idx], ());
+                }
+            }
+        }
+
+        graph
     }
 }
 

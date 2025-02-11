@@ -12,7 +12,7 @@ use spinne_logger::Logger;
 
 use crate::{
     analyze::component::{ComponentChild, ComponentRoot},
-    traverse::ProjectResolver,
+    traverse::{PackageResolver, ProjectResolver},
     util,
 };
 
@@ -253,6 +253,7 @@ struct ReturnVisitor<'a> {
     file_path: PathBuf,
     parent_file_path: PathBuf,
     child_components: Vec<ComponentChild>,
+    package_resolver: PackageResolver,
 }
 
 impl<'a> ReturnVisitor<'a> {
@@ -263,6 +264,7 @@ impl<'a> ReturnVisitor<'a> {
             file_path: file_path.clone(),
             parent_file_path: file_path.parent().unwrap().to_path_buf(),
             child_components: Vec::new(),
+            package_resolver: PackageResolver::new(),
         }
     }
 }
@@ -278,6 +280,7 @@ impl<'a> Visit<'a> for ReturnVisitor<'a> {
                     name: ident_name.clone(),
                     props: HashMap::new(),
                     origin_file_path: PathBuf::new(),
+                    project_name: None,
                 };
 
                 let reference_id = self
@@ -298,7 +301,13 @@ impl<'a> Visit<'a> for ReturnVisitor<'a> {
                         );
 
                         if let Some(component_root) = component_root {
-                            component_child.origin_file_path = component_root.1;
+                            component_child.origin_file_path = component_root.1.clone();
+                            // Try to get the project name from the package.json
+                            if let Ok(project_name) =
+                                (&mut self.package_resolver).get_package_name(&component_root.1)
+                            {
+                                component_child.project_name = Some(project_name);
+                            }
                         }
                     } else {
                         let declaration = self.semantic.symbols().get_declaration(symbol_id);
@@ -306,6 +315,12 @@ impl<'a> Visit<'a> for ReturnVisitor<'a> {
 
                         if is_react_component(declaration_node) {
                             component_child.origin_file_path = self.file_path.clone();
+                            // Try to get the project name from the package.json for local components
+                            if let Ok(project_name) =
+                                (&mut self.package_resolver).get_package_name(&self.file_path)
+                            {
+                                component_child.project_name = Some(project_name);
+                            }
                         }
 
                         if let AstKind::FormalParameter(_) = declaration_node.kind() {
@@ -328,7 +343,7 @@ impl<'a> Visit<'a> for ReturnVisitor<'a> {
                                 component_child.props.insert(ident_name, 1);
                             }
                         }
-                        JSXAttributeItem::SpreadAttribute(jsx_spread_attribute) => {}
+                        JSXAttributeItem::SpreadAttribute(_) => {}
                     });
 
                 self.child_components.push(component_child);
