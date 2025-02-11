@@ -1,5 +1,5 @@
 use ignore::{DirEntry, WalkBuilder};
-use petgraph::{algo::toposort, graph::NodeIndex, Graph};
+use petgraph::{algo::toposort, Graph};
 use spinne_logger::Logger;
 use std::path::PathBuf;
 
@@ -9,6 +9,7 @@ use super::Project;
 pub struct Workspace {
     workspace_root: PathBuf,
     projects: Vec<Project>,
+    graph: Graph<usize, ()>,
 }
 
 impl Workspace {
@@ -17,6 +18,7 @@ impl Workspace {
         Self {
             workspace_root,
             projects: Vec::new(),
+            graph: Graph::new(),
         }
     }
 
@@ -46,14 +48,15 @@ impl Workspace {
     pub fn traverse_projects(&mut self, exclude: &Vec<String>, include: &Vec<String>) {
         // Build dependency graph
         let dep_graph = self.build_dependency_graph();
+        self.graph = dep_graph;
 
         // Get topological sort
-        match toposort(&dep_graph, None) {
+        match toposort(&self.graph, None) {
             Ok(sorted_projects) => {
                 Logger::info("Traversing projects in dependency order");
                 // Traverse in order
                 for node_idx in sorted_projects {
-                    let project_idx = dep_graph[node_idx];
+                    let project_idx = self.graph[node_idx];
                     let project = &mut self.projects[project_idx];
                     Logger::info(&format!("Traversing project: {}", project.project_name));
                     project.traverse(exclude, include);
@@ -110,16 +113,22 @@ impl Workspace {
             .collect();
 
         // Add edges based on dependencies
-        for (i, project) in self.projects.iter().enumerate() {
-            if let Some(dep_name) = project.find_dependency("react") {
-                // Find the project index with this name
-                if let Some(dep_idx) = self
-                    .projects
-                    .iter()
-                    .position(|p| p.project_name == dep_name)
-                {
-                    // Add edge from dependent to dependency
-                    graph.add_edge(node_indices[i], node_indices[dep_idx], ());
+        for (i, dependent_project) in self.projects.iter().enumerate() {
+            // Get all dependencies of the current project
+            if let Some(deps) = dependent_project.get_dependencies() {
+                // For each dependency, check if it matches any project name
+                for dep_name in deps {
+                    // Find the project index with this name
+                    if let Some(dep_idx) = self.projects.iter()
+                        .position(|p| p.project_name == dep_name) {
+                        Logger::debug(&format!(
+                            "Found dependency: {} -> {}", 
+                            dependent_project.project_name, 
+                            self.projects[dep_idx].project_name
+                        ), 2);
+                        // Add edge from dependent to dependency
+                        graph.add_edge(node_indices[i], node_indices[dep_idx], ());
+                    }
                 }
             }
         }
@@ -130,6 +139,8 @@ impl Workspace {
 
 #[cfg(test)]
 mod tests {
+    use petgraph::adj::NodeIndex;
+
     use super::*;
     use crate::util::test_utils;
 
@@ -162,5 +173,43 @@ mod tests {
         workspace.discover_projects();
 
         assert_eq!(workspace.get_projects().len(), 2);
+    }
+
+    #[test]
+    fn test_project_sorting() {
+        let temp_dir = test_utils::create_mock_project(&vec![
+            // Project 1 - has no dependencies
+            ("project1/.git/HEAD", "ref: refs/heads/main"),
+            ("project1/package.json", r#"{"name": "project1"}"#),
+            
+            // Project 2 - depends on project1
+            ("project2/.git/HEAD", "ref: refs/heads/main"),
+            ("project2/package.json", r#"{
+                "name": "project2",
+                "dependencies": {
+                    "project1": "1.0.0"
+                }
+            }"#),
+            
+            // Project 3 - depends on project2
+            ("project3/.git/HEAD", "ref: refs/heads/main"),
+            ("project3/package.json", r#"{
+                "name": "project3",
+                "dependencies": {
+                    "project2": "1.0.0"
+                }
+            }"#),
+        ]);
+
+        let mut workspace = Workspace::new(temp_dir.path().to_path_buf());
+        workspace.discover_projects();
+        workspace.traverse_projects(&vec![], &vec![]);
+
+        let graph = workspace.graph;
+
+        assert_eq!(graph.edge_count(), 2);
+        assert_eq!(graph.node_weight(0.into()), Some(&0));
+        assert_eq!(graph.node_weight(1.into()), Some(&1));
+        assert_eq!(graph.node_weight(2.into()), Some(&2));
     }
 }
