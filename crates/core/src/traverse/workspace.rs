@@ -119,13 +119,18 @@ impl Workspace {
                 // For each dependency, check if it matches any project name
                 for dep_name in deps {
                     // Find the project index with this name
-                    if let Some(dep_idx) = self.projects.iter()
-                        .position(|p| p.project_name == dep_name) {
-                        Logger::debug(&format!(
-                            "Found dependency: {} -> {}", 
-                            dependent_project.project_name, 
-                            self.projects[dep_idx].project_name
-                        ), 2);
+                    if let Some(dep_idx) = self
+                        .projects
+                        .iter()
+                        .position(|p| p.project_name == dep_name)
+                    {
+                        Logger::debug(
+                            &format!(
+                                "Found dependency: {} -> {}",
+                                dependent_project.project_name, self.projects[dep_idx].project_name
+                            ),
+                            2,
+                        );
                         // Add edge from dependent to dependency
                         graph.add_edge(node_indices[i], node_indices[dep_idx], ());
                     }
@@ -139,8 +144,6 @@ impl Workspace {
 
 #[cfg(test)]
 mod tests {
-    use petgraph::adj::NodeIndex;
-
     use super::*;
     use crate::util::test_utils;
 
@@ -181,24 +184,28 @@ mod tests {
             // Project 1 - has no dependencies
             ("project1/.git/HEAD", "ref: refs/heads/main"),
             ("project1/package.json", r#"{"name": "project1"}"#),
-            
             // Project 2 - depends on project1
             ("project2/.git/HEAD", "ref: refs/heads/main"),
-            ("project2/package.json", r#"{
+            (
+                "project2/package.json",
+                r#"{
                 "name": "project2",
                 "dependencies": {
                     "project1": "1.0.0"
                 }
-            }"#),
-            
+            }"#,
+            ),
             // Project 3 - depends on project2
             ("project3/.git/HEAD", "ref: refs/heads/main"),
-            ("project3/package.json", r#"{
+            (
+                "project3/package.json",
+                r#"{
                 "name": "project3",
                 "dependencies": {
                     "project2": "1.0.0"
                 }
-            }"#),
+            }"#,
+            ),
         ]);
 
         let mut workspace = Workspace::new(temp_dir.path().to_path_buf());
