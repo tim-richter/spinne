@@ -2,7 +2,10 @@ use std::{collections::HashMap, path::PathBuf};
 
 use oxc_semantic::Semantic;
 
-use crate::{analyze::component::Component, traverse::ProjectResolver};
+use crate::{
+    analyze::component::Component,
+    traverse::{PackageResolver, ProjectResolver},
+};
 
 use super::extract_components;
 
@@ -10,6 +13,7 @@ pub struct ReactAnalyzer<'a> {
     pub semantic: &'a Semantic<'a>,
     pub file_path: PathBuf,
     pub resolver: &'a ProjectResolver,
+    pub package_resolver: &'a PackageResolver,
 }
 
 impl<'a> ReactAnalyzer<'a> {
@@ -17,15 +21,17 @@ impl<'a> ReactAnalyzer<'a> {
         semantic: &'a Semantic<'a>,
         file_path: PathBuf,
         resolver: &'a ProjectResolver,
+        package_resolver: &'a PackageResolver,
     ) -> Self {
         Self {
             semantic,
             file_path,
             resolver,
+            package_resolver,
         }
     }
 
-    pub fn analyze(&self) -> Vec<Component> {
+    pub fn analyze(&mut self) -> Vec<Component> {
         let root_components =
             extract_components(&self.semantic, &self.resolver, self.file_path.clone());
         let mut components = Vec::new();
@@ -100,7 +106,9 @@ mod tests {
 
         let file_path = PathBuf::from(temp_dir.path().join(files[0].0));
         let resolver = ProjectResolver::new(None);
-        let analyzer = ReactAnalyzer::new(&semantic.semantic, file_path, &resolver);
+        let package_resolver = PackageResolver::new();
+        let mut analyzer =
+            ReactAnalyzer::new(&semantic.semantic, file_path, &resolver, &package_resolver);
 
         let components = analyzer.analyze();
 

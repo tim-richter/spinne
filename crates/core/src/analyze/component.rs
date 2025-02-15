@@ -7,6 +7,8 @@ pub struct ComponentChild {
     pub name: String,
     pub props: HashMap<String, usize>,
     pub origin_file_path: PathBuf,
+    /// The name of the project this component belongs to, derived from the package.json name field
+    pub project_name: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

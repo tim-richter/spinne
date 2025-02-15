@@ -483,7 +483,6 @@
             function exportSvg(svgElement) {
                 const svgNode = svgElement.node ? svgElement.node() : svgElement
                 const bbox = svgNode.getBBox()
-								debugger
                 const clonedSvg = cloneAndPrepareSvg(svgNode, bbox)
                 const serializer = new XMLSerializer()
                 const source = serializer.serializeToString(clonedSvg)
