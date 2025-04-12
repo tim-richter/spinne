@@ -4,6 +4,7 @@ use std::{
     ops::Not,
     path::PathBuf,
 };
+use serde_json::Value;
 
 /// Represents a component with a unique identifier.
 #[derive(Debug, Clone)]
@@ -167,6 +168,38 @@ impl ComponentGraph {
     /// Returns the number of edges in the graph.
     pub fn edge_count(&self) -> usize {
         self.edges.len()
+    }
+
+    /// Converts the component graph into a serializable format for JSON output
+    pub fn to_serializable(&self) -> Value {
+        let mut components = Vec::new();
+        let mut edges = Vec::new();
+
+        // Convert nodes to serializable format
+        for component in self.nodes.values() {
+            components.push(serde_json::json!({
+                "id": component.id,
+                "name": component.name,
+                "path": component.path_relative_to_root,
+                "props": component.props,
+                "project": component.project,
+            }));
+        }
+
+        // Convert edges to serializable format
+        for (from_id, to_ids) in &self.edges {
+            for to_id in to_ids {
+                edges.push(serde_json::json!({
+                    "from": from_id,
+                    "to": to_id,
+                }));
+            }
+        }
+
+        serde_json::json!({
+            "components": components,
+            "edges": edges,
+        })
     }
 }
 

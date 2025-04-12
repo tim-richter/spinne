@@ -92,6 +92,13 @@ spinne -f html
 ```
 This will create 'spinne-report.html' and automatically open it in your default browser.
 
+To analyze specific entry points for exports:
+
+```bash
+spinne --entry-points src/index.tsx,src/components/index.ts
+```
+This will analyze the specified files for exported components before performing the normal component graph analysis.
+
 ## Options
 
 | Option | Description | Options | Default |
@@ -100,6 +107,7 @@ This will create 'spinne-report.html' and automatically open it in your default 
 | `-f, --format <format>` | Output format | `file`, `console`, `html` | `file` |
 | `--exclude <patterns>` | Glob patterns to exclude | comma separated patterns | `**/node_modules/**,**/dist/**,**/build/**,**/*.stories.tsx,**/*.test.tsx` |
 | `--include <patterns>` | Glob patterns to include | comma separated patterns | `**/*.tsx` |
+| `--entry-points <paths>` | Files to analyze for exports | comma separated paths | none |
 | `-l` | Verbosity level | Use multiple times (-l, -ll, etc.) | 0 |
 
 ## Configuration File
@@ -110,7 +118,8 @@ Example `spinne.json`:
 ```json
 {
   "include": ["**/*.tsx", "**/*.ts"],
-  "exclude": ["**/node_modules/**", "**/dist/**", "**/*.test.tsx"]
+  "exclude": ["**/node_modules/**", "**/dist/**", "**/*.test.tsx"],
+  "entry_points": ["src/index.tsx", "src/components/index.ts"]
 }
 ```
 
@@ -120,6 +129,7 @@ Example `spinne.json`:
 | --- | --- | --- |
 | `include` | Array of glob patterns for files to include in the analysis | `string[]` |
 | `exclude` | Array of glob patterns for files to exclude from the analysis | `string[]` |
+| `entry_points` | Array of file paths to analyze for exports | `string[]` |
 
 The configuration file options will be merged with any command line arguments you provide. For example, if you specify both exclude patterns in your `spinne.json` and via the `--exclude` flag, both sets of patterns will be used.
 

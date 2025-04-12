@@ -9,12 +9,16 @@ use oxc_allocator::Allocator;
 use spinne_logger::Logger;
 
 use crate::{
-    analyze::react::analyzer::ReactAnalyzer, config::ConfigValues, graph::Component,
-    parse::parse_tsx, util::replace_absolute_path_with_project_name, ComponentGraph, Config,
-    PackageJson,
+    analyze::react::analyzer::ReactAnalyzer,
+    config::{Config, ConfigValues},
+    graph::{Component, ComponentGraph},
+    package_json::PackageJson,
+    parse::parse_tsx,
+    traverse::{PackageResolver, ProjectResolver},
+    util::replace_absolute_path_with_project_name,
+    Exports,
 };
-
-use super::{PackageResolver, ProjectResolver};
+use glob::Pattern;
 
 /// Represents a project and its components.
 /// A Project is typically a repository with a package.json file.
@@ -77,36 +81,35 @@ impl Project {
     ///
     /// - `exclude`: A list of patterns to exclude from the traversal.
     /// - `include`: A list of patterns to include in the traversal.
-    pub fn traverse(&mut self, exclude_params: &Vec<String>, include_params: &Vec<String>) {
+    pub fn traverse(&mut self, exclude: &Vec<String>, include: &Vec<String>) {
+        let mut exclude_patterns = exclude.clone();
+        let mut include_patterns = include.clone();
+
+        // Merge config values with CLI values
+        if let Some(config) = &self.config {
+            if let Some(config_exclude) = &config.exclude {
+                exclude_patterns.extend(config_exclude.clone());
+            }
+            if let Some(config_include) = &config.include {
+                include_patterns.extend(config_include.clone());
+            }
+            // Handle entry points from config
+            if let Some(config_entry_points) = &config.entry_points {
+                Logger::info("Analyzing entry points from config file");
+                let entry_points = config_entry_points.iter()
+                    .map(|path| self.project_root.join(path))
+                    .collect::<Vec<_>>();
+                let exports = Exports::new(entry_points);
+                exports.analyze();
+            }
+        }
+
         Logger::info(&format!(
             "Starting traversal of project: {}",
             self.project_name
         ));
 
-        let mut exclude = exclude_params.clone();
-        let mut include = include_params.clone();
-
-        // merge the config with the exclude and include patterns
-        if let Some(config) = &self.config {
-            exclude = match &config.exclude {
-                Some(exclude) => {
-                    let mut exclude_vec = exclude.clone();
-                    exclude_vec.extend(exclude_params.iter().map(|e| e.to_string()));
-                    exclude_vec
-                }
-                None => exclude.clone(),
-            };
-            include = match &config.include {
-                Some(include) => {
-                    let mut include_vec = include.clone();
-                    include_vec.extend(include_params.iter().map(|e| e.to_string()));
-                    include_vec
-                }
-                None => include.clone(),
-            };
-        }
-
-        let walker = self.build_walker(&exclude, &include);
+        let walker = self.build_walker(&exclude_patterns, &include_patterns);
 
         for entry in walker {
             match entry {
@@ -638,6 +641,42 @@ mod tests {
         let mut project = Project::new(temp_dir.path().to_path_buf());
         project.traverse(&vec![], &vec!["src/pages/Button.tsx".to_string()]);
 
+        assert_eq!(project.component_graph.node_count(), 2);
+    }
+
+    #[test]
+    fn should_handle_entry_points_from_config() {
+        let temp_dir = test_utils::create_mock_project(&vec![
+            ("package.json", r#"{"name": "test"}"#),
+            (
+                "spinne.json",
+                r#"{"entry_points": ["src/index.tsx"]}"#,
+            ),
+            (
+                "tsconfig.json",
+                r#"{"compilerOptions": {"baseUrl": ".", "paths": {"@/*": ["src/*"]}}}"#,
+            ),
+            (
+                "src/index.tsx",
+                r#"
+                    import React from 'react';
+                    import { Button } from './components/Button';
+                    export const App = () => { return <Button />; }
+                "#,
+            ),
+            (
+                "src/components/Button.tsx",
+                r#"
+                    import React from 'react';
+                    export const Button = () => { return <button>Click me</button>; }
+                "#,
+            ),
+        ]);
+
+        let mut project = Project::new(temp_dir.path().to_path_buf());
+        project.traverse(&vec![], &vec!["**/*.tsx".to_string()]);
+
+        // Should find both components since the entry point is analyzed
         assert_eq!(project.component_graph.node_count(), 2);
     }
 }
