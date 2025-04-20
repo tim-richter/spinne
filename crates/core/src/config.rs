@@ -5,7 +5,7 @@ use std::{fs, path::PathBuf};
 use serde_json::Value;
 use spinne_logger::Logger;
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct ConfigValues {
     pub exclude: Option<Vec<String>>,
     pub include: Option<Vec<String>>,

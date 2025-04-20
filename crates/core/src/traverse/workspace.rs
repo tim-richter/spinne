@@ -1,14 +1,15 @@
 use ignore::{DirEntry, WalkBuilder};
-use petgraph::{algo::toposort, Graph};
+use petgraph::{algo::toposort, Graph, graph::NodeIndex};
 use spinne_logger::Logger;
 use std::path::PathBuf;
 
-use super::Project;
+use super::project_types::{Project, SourceProject, ConsumerProject};
+use crate::package_json::PackageJson;
 
 /// Represents a workspace containing multiple projects
 pub struct Workspace {
     workspace_root: PathBuf,
-    projects: Vec<Project>,
+    projects: Vec<Box<dyn Project>>,
     graph: Graph<usize, ()>,
 }
 
@@ -29,6 +30,9 @@ impl Workspace {
             self.workspace_root.display()
         ));
 
+        // First pass: discover all projects
+        let mut discovered_projects = Vec::new();
+        
         let walker = WalkBuilder::new(&self.workspace_root)
             .hidden(false) // We want to find .git folders
             .git_ignore(true)
@@ -36,12 +40,116 @@ impl Workspace {
 
         for entry in walker {
             match entry {
-                Ok(entry) => self.check_project_root(&entry),
+                Ok(entry) => self.discover_project(&entry, &mut discovered_projects),
                 Err(e) => Logger::error(&format!("Error while walking directory: {}", e)),
             }
         }
 
-        Logger::info(&format!("Found {} projects", self.projects.len()));
+        Logger::info(&format!("Found {} projects", discovered_projects.len()));
+        
+        // Second pass: classify projects as source or consumer
+        self.classify_projects(discovered_projects);
+    }
+    
+    /// Discovers a single project and adds it to the list of discovered projects
+    fn discover_project(&self, entry: &DirEntry, discovered_projects: &mut Vec<(PathBuf, String)>) {
+        let path = entry.path();
+
+        // Only check directories
+        if !path.is_dir() {
+            return;
+        }
+
+        // Check if this is a .git directory
+        if path.file_name().map_or(false, |name| name == ".git") {
+            let project_root = path.parent().unwrap_or(path).to_path_buf();
+
+            // Check if package.json exists in the project root
+            let package_json_path = project_root.join("package.json");
+            if package_json_path.exists() {
+                // Read the project name from package.json
+                if let Some(package_json) = PackageJson::read(&package_json_path, false) {
+                    if let Some(project_name) = package_json.name {
+                        Logger::info(&format!("Found project at: {} ({})", project_root.display(), project_name));
+                        discovered_projects.push((project_root, project_name));
+                    }
+                }
+            }
+        }
+    }
+    
+    /// Classifies discovered projects as source or consumer projects
+    fn classify_projects(&mut self, discovered_projects: Vec<(PathBuf, String)>) {
+        // First, create a map of project names to their indices for quick lookup
+        let mut project_indices = std::collections::HashMap::new();
+        
+        // Create a temporary graph to track dependencies
+        let mut temp_graph = Graph::<usize, ()>::new();
+        
+        // First pass: add all projects to the graph and create source projects
+        for (i, (project_root, project_name)) in discovered_projects.iter().enumerate() {
+            // Add node to the graph
+            let node_idx = temp_graph.add_node(i);
+            project_indices.insert(project_name.clone(), node_idx);
+            
+            // Create a source project
+            let source_project = SourceProject::new(project_root.clone());
+            self.projects.push(Box::new(source_project));
+        }
+        
+        // Second pass: add edges based on dependencies and identify consumer projects
+        for (i, (project_root, project_name)) in discovered_projects.iter().enumerate() {
+            // Read dependencies from package.json
+            if let Some(package_json) = PackageJson::read(&project_root.join("package.json"), true) {
+                if let Some(deps) = package_json.get_all_dependencies() {
+                    // For each dependency, check if it matches any project name
+                    for dep_name in deps {
+                        if let Some(&dep_idx) = project_indices.get(&dep_name) {
+                            // Add edge from dependent to dependency
+                            let node_idx = NodeIndex::new(i);
+                            temp_graph.add_edge(node_idx, dep_idx, ());
+                        }
+                    }
+                }
+            }
+        }
+        
+        // Third pass: identify consumer projects and update the graph
+        let mut consumer_indices = Vec::new();
+        
+        for (i, (project_root, project_name)) in discovered_projects.iter().enumerate() {
+            // Check if this project has any outgoing edges (depends on other projects)
+            let node_idx = NodeIndex::new(i);
+            if temp_graph.edges_directed(node_idx, petgraph::Direction::Outgoing).count() > 0 {
+                // This is a consumer project
+                consumer_indices.push(i);
+                
+                // Replace the source project with a consumer project
+                let mut consumer_project = ConsumerProject::new(project_root.clone());
+                
+                // Add source projects that this consumer depends on
+                if let Some(package_json) = PackageJson::read(&project_root.join("package.json"), true) {
+                    if let Some(deps) = package_json.get_all_dependencies() {
+                        for dep_name in deps {
+                            if let Some(&dep_idx) = project_indices.get(&dep_name) {
+                                let dep_i = temp_graph[dep_idx];
+                                if let Some(source_project) = self.projects.get(dep_i).and_then(|p| p.as_any().downcast_ref::<SourceProject>()) {
+                                    consumer_project.add_source_project(source_project.clone());
+                                }
+                            }
+                        }
+                    }
+                }
+                
+                // Replace the source project with the consumer project
+                self.projects[i] = Box::new(consumer_project);
+            }
+        }
+        
+        // Update the graph with the final project structure
+        self.graph = temp_graph;
+        
+        Logger::info(&format!("Classified {} projects as consumers", consumer_indices.len()));
     }
 
     /// Traverses all discovered projects to analyze their components in dependency order
@@ -58,7 +166,7 @@ impl Workspace {
                 for node_idx in sorted_projects {
                     let project_idx = self.graph[node_idx];
                     let project = &mut self.projects[project_idx];
-                    Logger::info(&format!("Traversing project: {}", project.project_name));
+                    Logger::info(&format!("Traversing project: {}", project.get_name()));
                     project.traverse(exclude, include);
                 }
             }
@@ -75,33 +183,8 @@ impl Workspace {
     }
 
     /// Gets a reference to all discovered projects
-    pub fn get_projects(&self) -> &Vec<Project> {
+    pub fn get_projects(&self) -> &Vec<Box<dyn Project>> {
         &self.projects
-    }
-
-    /// Checks if a directory entry is a project root by looking for package.json and .git
-    fn check_project_root(&mut self, entry: &DirEntry) {
-        let path = entry.path();
-
-        // Only check directories
-        if !path.is_dir() {
-            return;
-        }
-
-        // Check if this is a .git directory
-        if path.file_name().map_or(false, |name| name == ".git") {
-            let project_root = path.parent().unwrap_or(path).to_path_buf();
-
-            // Check if package.json exists in the project root
-            let package_json_path = project_root.join("package.json");
-            if package_json_path.exists() {
-                Logger::info(&format!("Found project at: {}", project_root.display()));
-
-                // Create and add the project
-                let project = Project::new(project_root);
-                self.projects.push(project);
-            }
-        }
     }
 
     fn build_dependency_graph(&self) -> Graph<usize, ()> {
@@ -122,12 +205,12 @@ impl Workspace {
                     if let Some(dep_idx) = self
                         .projects
                         .iter()
-                        .position(|p| p.project_name == dep_name)
+                        .position(|p| p.get_name() == dep_name)
                     {
                         Logger::debug(
                             &format!(
                                 "Found dependency: {} -> {}",
-                                dependent_project.project_name, self.projects[dep_idx].project_name
+                                dependent_project.get_name(), self.projects[dep_idx].get_name()
                             ),
                             2,
                         );
@@ -184,6 +267,7 @@ mod tests {
             // Project 1 - has no dependencies
             ("project1/.git/HEAD", "ref: refs/heads/main"),
             ("project1/package.json", r#"{"name": "project1"}"#),
+
             // Project 2 - depends on project1
             ("project2/.git/HEAD", "ref: refs/heads/main"),
             (
@@ -195,6 +279,7 @@ mod tests {
                 }
             }"#,
             ),
+
             // Project 3 - depends on project2
             ("project3/.git/HEAD", "ref: refs/heads/main"),
             (

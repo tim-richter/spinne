@@ -2,7 +2,7 @@ use clap::Parser;
 use spinne_logger::Logger;
 use std::{fs::File, path::PathBuf};
 
-use spinne_core::{Workspace, Exports};
+use spinne_core::Workspace;
 use spinne_html::HtmlGenerator;
 
 #[derive(Parser, Debug)]
@@ -40,24 +40,6 @@ struct Args {
     #[arg(long, value_delimiter = ',', default_value = "**/*.tsx")]
     include: Vec<String>,
 
-    /// Entry points to analyze for exports
-    /// 
-    /// Specifies one or more files to analyze for exports. These files are typically
-    /// entry points of your application, such as:
-    /// - Main application files (e.g., src/index.tsx)
-    /// - Barrel files that re-export components
-    /// - Library entry points
-    /// 
-    /// When specified, spinne will:
-    /// 1. Analyze these files for exported components
-    /// 2. Log information about found exports
-    /// 3. Continue with the normal component graph analysis
-    /// 
-    /// Example:
-    ///   --entry-points src/index.tsx,src/components/index.ts
-    #[arg(long, value_delimiter = ',')]
-    entry_points: Vec<PathBuf>,
-
     /// Verbosity level (-l = level 1, -ll = level 2, etc.)
     #[arg(short = 'l', action = clap::ArgAction::Count)]
     verbosity: u8,
@@ -82,13 +64,6 @@ fn main() -> std::io::Result<()> {
 
     let absolute_entry = std::fs::canonicalize(&args.entry)?;
 
-    // If entry points are specified, analyze them for exports
-    if !args.entry_points.is_empty() {
-        Logger::info("Analyzing specified entry points for exports");
-        let exports = Exports::new(args.entry_points);
-        exports.analyze();
-    }
-
     let mut workspace = Workspace::new(absolute_entry);
     workspace.discover_projects();
     workspace.traverse_projects(&args.exclude, &args.include);
@@ -99,8 +74,8 @@ fn main() -> std::io::Result<()> {
         .iter()
         .map(|project| {
             serde_json::json!({
-                "name": project.project_name,
-                "graph": project.component_graph.to_serializable()
+                "name": project.get_name(),
+                "graph": project.get_component_graph().to_serializable()
             })
         })
         .collect::<Vec<_>>();

@@ -2,6 +2,7 @@ use std::path::PathBuf;
 
 use oxc_resolver::{Resolution, ResolveOptions, Resolver, TsconfigOptions, TsconfigReferences};
 
+#[derive(Clone)]
 pub struct ProjectResolver {
     tsconfig_path: Option<PathBuf>,
 }

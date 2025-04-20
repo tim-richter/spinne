@@ -8,6 +8,7 @@ pub fn is_pascal_case(name: &str) -> bool {
     name.chars().next().map_or(false, |c| c.is_uppercase())
 }
 
+/// Reduce a path to the node module name.
 pub fn reduce_to_node_module_name(path: &str) -> String {
     let last = path.split("node_modules/").last().unwrap().to_string();
     last.split('/').next().unwrap().to_string()

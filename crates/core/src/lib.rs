@@ -11,6 +11,6 @@ pub use config::Config;
 pub use exports::Exports;
 pub use graph::ComponentGraph;
 pub use package_json::PackageJson;
-pub use traverse::Project;
+pub use traverse::project_types::{Project, SourceProject, ConsumerProject};
 pub use traverse::ProjectResolver;
 pub use traverse::Workspace;

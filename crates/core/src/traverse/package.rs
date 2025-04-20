@@ -29,6 +29,7 @@ impl From<serde_json::Error> for PackageResolverError {
 ///
 /// Mainly used for node_modules resolution and resolving imports from other packages
 /// The resulting package name is the name of the package that contains the file and can be used to create edges between packages
+#[derive(Clone)]
 pub struct PackageResolver {
     /// Cache of path -> package name to avoid reading the same package.json files multiple times
     cache: HashMap<PathBuf, String>,
