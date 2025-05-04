@@ -9,6 +9,8 @@ use spinne_html::HtmlGenerator;
 #[command(version, about, long_about = None)]
 struct Args {
     /// Entry point directory
+    /// 
+    /// This is only the starting point of the analysis and spinne will traverse all projects in this directory.
     #[arg(short, long, default_value = "./")]
     entry: PathBuf,
 
@@ -68,17 +70,9 @@ fn main() -> std::io::Result<()> {
     workspace.discover_projects();
     workspace.traverse_projects(&args.exclude, &args.include);
 
-    // Create a serializable structure containing all project graphs
-    let workspace_data = workspace
-        .get_projects()
-        .iter()
-        .map(|project| {
-            serde_json::json!({
-                "name": project.get_name(),
-                "graph": project.get_component_graph().to_serializable()
-            })
-        })
-        .collect::<Vec<_>>();
+    // Get the shared component registry
+    let registry = workspace.get_component_registry();
+    let serializable_data = registry.to_serializable();
 
     // output to json file in current working directory
     if args.format == Format::File {
@@ -91,18 +85,13 @@ fn main() -> std::io::Result<()> {
         ));
 
         let file = File::create(output_path_with_extension)?;
-        serde_json::to_writer_pretty(file, &workspace_data)?;
+        serde_json::to_writer_pretty(file, &serializable_data)?;
     }
 
     // output to console
     if args.format == Format::Console {
         Logger::info("Printing report to console:");
-        for project_data in workspace_data.iter() {
-            println!(
-                "Project '{}': {:#?}",
-                project_data["name"], project_data["graph"]
-            );
-        }
+        println!("{:#?}", serializable_data);
     }
 
     // output to html file in current working directory
@@ -115,7 +104,7 @@ fn main() -> std::io::Result<()> {
             output_path_with_extension
         ));
 
-        match HtmlGenerator::new(serde_json::to_value(workspace_data).unwrap())
+        match HtmlGenerator::new(serde_json::to_value(serializable_data).unwrap())
             .save(&output_path_with_extension)
         {
             Ok(_) => Logger::info(&format!(

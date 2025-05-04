@@ -4,13 +4,17 @@ use spinne_logger::Logger;
 use std::path::PathBuf;
 
 use super::project_types::{Project, SourceProject, ConsumerProject};
-use crate::package_json::PackageJson;
+use crate::{
+    graph::ComponentRegistry,
+    package_json::PackageJson,
+};
 
 /// Represents a workspace containing multiple projects
 pub struct Workspace {
     workspace_root: PathBuf,
     projects: Vec<Box<dyn Project>>,
     graph: Graph<usize, ()>,
+    component_registry: ComponentRegistry,
 }
 
 impl Workspace {
@@ -20,7 +24,18 @@ impl Workspace {
             workspace_root,
             projects: Vec::new(),
             graph: Graph::new(),
+            component_registry: ComponentRegistry::new(),
         }
+    }
+
+    /// Gets a reference to the component registry
+    pub fn get_component_registry(&self) -> &ComponentRegistry {
+        &self.component_registry
+    }
+
+    /// Gets a mutable reference to the component registry
+    pub fn get_component_registry_mut(&mut self) -> &mut ComponentRegistry {
+        &mut self.component_registry
     }
 
     /// Discovers and analyzes all projects in the workspace
@@ -92,8 +107,8 @@ impl Workspace {
             let node_idx = temp_graph.add_node(i);
             project_indices.insert(project_name.clone(), node_idx);
             
-            // Create a source project
-            let source_project = SourceProject::new(project_root.clone());
+            // Create a source project with a reference to the workspace's component registry
+            let source_project = SourceProject::new(project_root.clone(), &mut self.component_registry);
             self.projects.push(Box::new(source_project));
         }
         
@@ -125,7 +140,7 @@ impl Workspace {
                 consumer_indices.push(i);
                 
                 // Replace the source project with a consumer project
-                let mut consumer_project = ConsumerProject::new(project_root.clone());
+                let mut consumer_project = ConsumerProject::new(project_root.clone(), &mut self.component_registry);
                 
                 // Add source projects that this consumer depends on
                 if let Some(package_json) = PackageJson::read(&project_root.join("package.json"), true) {

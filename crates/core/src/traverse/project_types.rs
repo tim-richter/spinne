@@ -1,13 +1,13 @@
 use std::{
     any::Any,
-    collections::HashSet,
+    collections::{HashMap, HashSet},
     path::PathBuf,
 };
 
 use crate::{
     analyze::react::analyzer::ReactAnalyzer,
     config::{Config, ConfigValues},
-    graph::{Component, ComponentGraph},
+    graph::{ComponentNode, ComponentRegistry},
     package_json::PackageJson,
     parse::parse_tsx,
     traverse::{PackageResolver, ProjectResolver},
@@ -25,10 +25,10 @@ pub trait Project: Any {
     fn get_name(&self) -> &str;
     
     /// Gets the component graph of the project
-    fn get_component_graph(&self) -> &ComponentGraph;
+    fn get_component_graph(&self) -> &ComponentRegistry;
     
     /// Gets mutable access to the component graph
-    fn get_component_graph_mut(&mut self) -> &mut ComponentGraph;
+    fn get_component_graph_mut(&mut self) -> &mut ComponentRegistry;
     
     /// Gets all dependencies of the project
     fn get_dependencies(&self) -> Option<HashSet<String>>;
@@ -48,14 +48,14 @@ pub trait Project: Any {
 pub struct SourceProject {
     pub project_root: PathBuf,
     pub project_name: String,
-    pub component_graph: ComponentGraph,
+    component_registry: *mut ComponentRegistry,
     resolver: ProjectResolver,
     package_resolver: PackageResolver,
     config: Option<ConfigValues>,
 }
 
 impl SourceProject {
-    pub fn new(project_root: PathBuf) -> Self {
+    pub fn new(project_root: PathBuf, component_registry: &mut ComponentRegistry) -> Self {
         if !project_root.exists() {
             panic!("Project root does not exist");
         }
@@ -84,7 +84,7 @@ impl SourceProject {
         Self {
             project_root,
             project_name,
-            component_graph: ComponentGraph::new(),
+            component_registry: component_registry as *mut ComponentRegistry,
             resolver,
             package_resolver: PackageResolver::new(),
             config,
@@ -155,44 +155,45 @@ impl SourceProject {
         
         // Extract components using the analyzer
         let components = react_analyzer.analyze();
-        
-        for component in components {
-            let path_relative = replace_absolute_path_with_project_name(
-                self.project_root.clone(),
-                component.file_path.clone(),
-                self.project_name.clone(),
-            );
 
+        for component in components {
             // Create base component
-            let base_component = Component::new(
+            let base_component = ComponentNode::new(
                 component.name.clone(),
-                component.file_path.clone(),
-                path_relative.clone(),
-                self.project_name.clone(),
+                replace_absolute_path_with_project_name(
+                    self.project_root.clone(),
+                    component.file_path.clone(),
+                    self.project_name.clone(),
+                ),
+                HashMap::new(),
             );
 
             // Create child components
-            let child_components: Vec<Component> = component
+            let child_components: Vec<ComponentNode> = component
                 .children
                 .into_iter()
                 .map(|child| {
-                    let child_path_relative = replace_absolute_path_with_project_name(
-                        self.project_root.clone(),
-                        child.origin_file_path.clone(),
-                        self.project_name.clone(),
-                    );
-                    Component::new(
+                    ComponentNode::new(
                         child.name,
-                        child.origin_file_path,
-                        child_path_relative,
-                        self.project_name.clone(),
+                        replace_absolute_path_with_project_name(
+                            self.project_root.clone(),
+                            child.origin_file_path.clone(),
+                            self.project_name.clone(),
+                        ),
+                        HashMap::new(),
                     )
                 })
                 .collect();
 
             // Add everything to the graph in one operation
-            self.component_graph
-                .add_component_with_deps(base_component, child_components);
+            unsafe {
+                (*self.component_registry).add_component(base_component.clone(), self.project_name.clone());
+
+                for child in child_components {
+                    (*self.component_registry).add_component(child.clone(), self.project_name.clone());
+                    (*self.component_registry).add_dependency(base_component.id.clone(), child.id.clone(), Some(self.project_name.clone()));
+                }
+            }
         }
     }
 }
@@ -206,12 +207,12 @@ impl Project for SourceProject {
         &self.project_name
     }
 
-    fn get_component_graph(&self) -> &ComponentGraph {
-        &self.component_graph
+    fn get_component_graph(&self) -> &ComponentRegistry {
+        unsafe { &*self.component_registry }
     }
 
-    fn get_component_graph_mut(&mut self) -> &mut ComponentGraph {
-        &mut self.component_graph
+    fn get_component_graph_mut(&mut self) -> &mut ComponentRegistry {
+        unsafe { &mut *self.component_registry }
     }
 
     fn get_dependencies(&self) -> Option<HashSet<String>> {
@@ -279,7 +280,7 @@ impl Project for SourceProject {
 pub struct ConsumerProject {
     pub project_root: PathBuf,
     pub project_name: String,
-    pub component_graph: ComponentGraph,
+    component_registry: *mut ComponentRegistry,
     resolver: ProjectResolver,
     package_resolver: PackageResolver,
     config: Option<ConfigValues>,
@@ -287,7 +288,7 @@ pub struct ConsumerProject {
 }
 
 impl ConsumerProject {
-    pub fn new(project_root: PathBuf) -> Self {
+    pub fn new(project_root: PathBuf, component_registry: &mut ComponentRegistry) -> Self {
         if !project_root.exists() {
             panic!("Project root does not exist");
         }
@@ -316,7 +317,7 @@ impl ConsumerProject {
         Self {
             project_root,
             project_name,
-            component_graph: ComponentGraph::new(),
+            component_registry: component_registry as *mut ComponentRegistry,
             resolver,
             package_resolver: PackageResolver::new(),
             config,
@@ -398,42 +399,43 @@ impl ConsumerProject {
         let components = react_analyzer.analyze();
         
         for component in components {
-            let path_relative = replace_absolute_path_with_project_name(
-                self.project_root.clone(),
-                component.file_path.clone(),
-                self.project_name.clone(),
-            );
-
             // Create base component
-            let base_component = Component::new(
+            let base_component = ComponentNode::new(
                 component.name.clone(),
-                component.file_path.clone(),
-                path_relative.clone(),
-                self.project_name.clone(),
+                replace_absolute_path_with_project_name(
+                    self.project_root.clone(),
+                    component.file_path.clone(),
+                    self.project_name.clone(),
+                ),
+                HashMap::new(),
             );
 
             // Create child components
-            let child_components: Vec<Component> = component
+            let child_components: Vec<ComponentNode> = component
                 .children
                 .into_iter()
                 .map(|child| {
-                    let child_path_relative = replace_absolute_path_with_project_name(
-                        self.project_root.clone(),
-                        child.origin_file_path.clone(),
-                        self.project_name.clone(),
-                    );
-                    Component::new(
+                    ComponentNode::new(
                         child.name,
-                        child.origin_file_path,
-                        child_path_relative,
-                        self.project_name.clone(),
+                        replace_absolute_path_with_project_name(
+                            self.project_root.clone(),
+                            child.origin_file_path.clone(),
+                            self.project_name.clone(),
+                        ),
+                        HashMap::new(),
                     )
                 })
                 .collect();
 
             // Add everything to the graph in one operation
-            self.component_graph
-                .add_component_with_deps(base_component, child_components);
+            unsafe {
+                (*self.component_registry).add_component(base_component.clone(), self.project_name.clone());
+
+                for child in child_components {
+                    (*self.component_registry).add_component(child.clone(), self.project_name.clone());
+                    (*self.component_registry).add_dependency(base_component.id.clone(), child.id.clone(), Some(self.project_name.clone()));
+                }
+            }
         }
     }
 }
@@ -447,12 +449,12 @@ impl Project for ConsumerProject {
         &self.project_name
     }
 
-    fn get_component_graph(&self) -> &ComponentGraph {
-        &self.component_graph
+    fn get_component_graph(&self) -> &ComponentRegistry {
+        unsafe { &*self.component_registry }
     }
 
-    fn get_component_graph_mut(&mut self) -> &mut ComponentGraph {
-        &mut self.component_graph
+    fn get_component_graph_mut(&mut self) -> &mut ComponentRegistry {
+        unsafe { &mut *self.component_registry }
     }
 
     fn get_dependencies(&self) -> Option<HashSet<String>> {
