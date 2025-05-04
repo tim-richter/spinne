@@ -9,7 +9,8 @@ use crate::{
     package_json::PackageJson,
 };
 
-/// Represents a workspace containing multiple projects
+/// Represents a workspace containing multiple projects.
+/// A workspace is a directory that contains multiple projects and holds a shared component registry
 pub struct Workspace {
     workspace_root: PathBuf,
     projects: Vec<Box<dyn Project>>,
@@ -318,5 +319,127 @@ mod tests {
         assert_eq!(graph.node_weight(0.into()), Some(&0));
         assert_eq!(graph.node_weight(1.into()), Some(&1));
         assert_eq!(graph.node_weight(2.into()), Some(&2));
+    }
+
+    #[test]
+    fn test_source_consumer_component_flow() {
+        let temp_dir = test_utils::create_mock_project(&vec![
+            // Source project with a Button component
+            ("source-lib/.git/HEAD", "ref: refs/heads/main"),
+            ("source-lib/package.json", r#"{"name": "source-lib"}"#),
+            (
+                "source-lib/src/components/Button.tsx",
+                r#"
+                import React from 'react';
+
+                export interface ButtonProps {
+                    label: string;
+                    onClick: () => void;
+                }
+
+                export const Button: React.FC<ButtonProps> = ({ label, onClick }) => {
+                    return <button onClick={onClick}>{label}</button>;
+                };
+                "#,
+            ),
+            (
+                "source-lib/src/components/index.ts",
+                r#"export * from './Button';"#,
+            ),
+
+            // Consumer project that uses the Button component
+            ("consumer-app/.git/HEAD", "ref: refs/heads/main"),
+            (
+                "consumer-app/package.json",
+                r#"{
+                    "name": "consumer-app",
+                    "dependencies": {
+                        "source-lib": "1.0.0"
+                    }
+                }"#,
+            ),
+            (
+                "consumer-app/src/App.tsx",
+                r#"
+                import React from 'react';
+                import { Button } from 'source-lib';
+
+                export const App: React.FC = () => {
+                    const handleClick = () => console.log('clicked');
+                    return <Button label="Click me" onClick={handleClick} />;
+                };
+                "#,
+            ),
+        ]);
+
+        // Create and initialize workspace
+        let mut workspace = Workspace::new(temp_dir.path().to_path_buf());
+        workspace.discover_projects();
+
+        // Verify project discovery and classification
+        let projects = workspace.get_projects();
+        assert_eq!(projects.len(), 2, "Should find both source and consumer projects");
+
+        // Find the consumer project
+        let consumer_project = projects.iter().find(|p| p.get_name() == "consumer-app");
+        assert!(consumer_project.is_some(), "Should find consumer project");
+        let consumer_project = consumer_project.unwrap();
+        
+        // Verify it's actually a ConsumerProject
+        assert!(
+            consumer_project.as_any().downcast_ref::<ConsumerProject>().is_some(),
+            "consumer-app should be a ConsumerProject"
+        );
+
+        // Find the source project
+        let source_project = projects.iter().find(|p| p.get_name() == "source-lib");
+        assert!(source_project.is_some(), "Should find source project");
+        let source_project = source_project.unwrap();
+        
+        // Verify it's actually a SourceProject
+        assert!(
+            source_project.as_any().downcast_ref::<SourceProject>().is_some(),
+            "source-lib should be a SourceProject"
+        );
+
+        // Analyze all projects
+        workspace.traverse_projects(&vec![], &vec![]);
+
+        // Get the component registry to verify connections
+        let registry = workspace.get_component_registry();
+
+        // Verify Button component exists in source project
+        let button_component = registry.find_component("Button", "source-lib");
+        assert!(button_component.is_some(), "Button component should exist in source project");
+
+        // Verify App component exists in consumer project
+        let app_component = registry.find_component("App", "consumer-app");
+        assert!(app_component.is_some(), "App component should exist in consumer project");
+
+        println!("{}", workspace.get_component_registry().to_serializable());
+
+        // Verify the connection between App and Button
+        if let Some(app_info) = app_component {
+            let app_deps = registry.get_dependencies(app_info.node.id);
+            assert_eq!(app_deps.len(), 1, "App should have one dependency");
+
+            let button_dep = app_deps.first().unwrap();
+            assert_eq!(
+                button_dep.1.project_context,
+                Some("source-lib".to_string()),
+                "Button dependency should reference source-lib project"
+            );
+
+            // Verify Button props are correctly tracked
+            let button_info = registry.get_component(button_dep.0).unwrap();
+            assert!(
+                button_info.node.props.contains_key("label"),
+                "Button should have 'label' prop"
+            );
+            assert!(
+                button_info.node.props.contains_key("onClick"),
+                "Button should have 'onClick' prop"
+            );
+        }
     }
 }

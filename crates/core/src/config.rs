@@ -1,5 +1,3 @@
-// Handles interactions with the config file
-
 use std::{fs, path::PathBuf};
 
 use serde_json::Value;
@@ -12,6 +10,10 @@ pub struct ConfigValues {
     pub entry_points: Option<Vec<String>>,
 }
 
+/// Represents the config file
+/// 
+/// The config file is a JSON file that contains the configuration for the project.
+/// If the config file is not found, the default values will be used.
 pub struct Config {
     pub path: PathBuf,
 }

@@ -12,7 +12,6 @@ use crate::{
     parse::parse_tsx,
     traverse::{PackageResolver, ProjectResolver},
     util::replace_absolute_path_with_project_name,
-    Exports,
 };
 use spinne_logger::Logger;
 
@@ -243,8 +242,6 @@ impl Project for SourceProject {
                 let entry_points = config_entry_points.iter()
                     .map(|path| self.project_root.join(path))
                     .collect::<Vec<_>>();
-                let exports = Exports::new(entry_points);
-                exports.analyze();
             }
         }
 
@@ -399,41 +396,133 @@ impl ConsumerProject {
         let components = react_analyzer.analyze();
         
         for component in components {
-            // Create base component
-            let base_component = ComponentNode::new(
-                component.name.clone(),
-                replace_absolute_path_with_project_name(
-                    self.project_root.clone(),
-                    component.file_path.clone(),
-                    self.project_name.clone(),
-                ),
-                HashMap::new(),
-            );
+            // Check if this component is from a source project
+            let mut is_from_source = false;
+            let mut source_project_name = None;
+            
+            // Check if the component's file path matches any source project
+            for source_project in &self.source_projects {
+                if path.starts_with(&source_project.project_root) {
+                    is_from_source = true;
+                    source_project_name = Some(source_project.project_name.clone());
+                    break;
+                }
+            }
 
-            // Create child components
-            let child_components: Vec<ComponentNode> = component
-                .children
-                .into_iter()
-                .map(|child| {
-                    ComponentNode::new(
-                        child.name,
-                        replace_absolute_path_with_project_name(
-                            self.project_root.clone(),
-                            child.origin_file_path.clone(),
-                            self.project_name.clone(),
-                        ),
-                        HashMap::new(),
-                    )
-                })
-                .collect();
+            if is_from_source {
+                // Don't register the component again, just create dependencies
+                if let Some(source_project_name) = source_project_name {
+                    // Find the component in the source project
+                    if let Some(source_component) = unsafe {
+                        (*self.component_registry).find_component(&component.name, &source_project_name)
+                    } {
+                        // Create child components
+                        let child_components: Vec<ComponentNode> = component
+                            .children
+                            .into_iter()
+                            .map(|child| {
+                                ComponentNode::new(
+                                    child.name,
+                                    replace_absolute_path_with_project_name(
+                                        self.project_root.clone(),
+                                        child.origin_file_path.clone(),
+                                        self.project_name.clone(),
+                                    ),
+                                    HashMap::new(),
+                                )
+                            })
+                            .collect();
 
-            // Add everything to the graph in one operation
-            unsafe {
-                (*self.component_registry).add_component(base_component.clone(), self.project_name.clone());
+                        // Add dependencies for each child component
+                        for child in child_components {
+                            if let Some(child_component) = unsafe {
+                                (*self.component_registry).find_component(&child.name, &source_project_name)
+                            } {
+                                unsafe {
+                                    (*self.component_registry).add_dependency(
+                                        source_component.node.id,
+                                        child_component.node.id,
+                                        Some(source_project_name.clone()),
+                                    ).unwrap_or_else(|e| {
+                                        Logger::error(&format!("Failed to add dependency: {}", e));
+                                    });
+                                }
+                            }
+                        }
+                    }
+                }
+            } else {
+                // This is a component defined in the consumer project
+                // Create base component
+                let base_component = ComponentNode::new(
+                    component.name.clone(),
+                    replace_absolute_path_with_project_name(
+                        self.project_root.clone(),
+                        component.file_path.clone(),
+                        self.project_name.clone(),
+                    ),
+                    HashMap::new(),
+                );
 
-                for child in child_components {
-                    (*self.component_registry).add_component(child.clone(), self.project_name.clone());
-                    (*self.component_registry).add_dependency(base_component.id.clone(), child.id.clone(), Some(self.project_name.clone()));
+                // Create child components
+                let child_components: Vec<ComponentNode> = component
+                    .children
+                    .into_iter()
+                    .map(|child| {
+                        ComponentNode::new(
+                            child.name,
+                            replace_absolute_path_with_project_name(
+                                self.project_root.clone(),
+                                child.origin_file_path.clone(),
+                                self.project_name.clone(),
+                            ),
+                            HashMap::new(),
+                        )
+                    })
+                    .collect();
+
+                // Add everything to the graph in one operation
+                unsafe {
+                    (*self.component_registry).add_component(base_component.clone(), self.project_name.clone());
+
+                    for child in child_components {
+                        // Check if the child component is from a source project
+                        let mut child_is_from_source = false;
+                        let mut child_source_project_name = None;
+                        
+                        for source_project in &self.source_projects {
+                            if child.file_path.starts_with(&source_project.project_root) {
+                                child_is_from_source = true;
+                                child_source_project_name = Some(source_project.project_name.clone());
+                                break;
+                            }
+                        }
+
+                        if child_is_from_source {
+                            // Find the component in the source project
+                            if let Some(child_source_project_name) = child_source_project_name {
+                                if let Some(source_component) = (*self.component_registry).find_component(&child.name, &child_source_project_name) {
+                                    (*self.component_registry).add_dependency(
+                                        base_component.id.clone(),
+                                        source_component.node.id,
+                                        Some(child_source_project_name),
+                                    ).unwrap_or_else(|e| {
+                                        Logger::error(&format!("Failed to add dependency: {}", e));
+                                    });
+                                }
+                            }
+                        } else {
+                            // Register the child component and add dependency
+                            (*self.component_registry).add_component(child.clone(), self.project_name.clone());
+                            (*self.component_registry).add_dependency(
+                                base_component.id.clone(),
+                                child.id.clone(),
+                                Some(self.project_name.clone()),
+                            ).unwrap_or_else(|e| {
+                                Logger::error(&format!("Failed to add dependency: {}", e));
+                            });
+                        }
+                    }
                 }
             }
         }
@@ -485,8 +574,6 @@ impl Project for ConsumerProject {
                 let entry_points = config_entry_points.iter()
                     .map(|path| self.project_root.join(path))
                     .collect::<Vec<_>>();
-                let exports = Exports::new(entry_points);
-                exports.analyze();
             }
         }
 
