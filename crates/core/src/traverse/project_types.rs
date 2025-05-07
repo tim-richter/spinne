@@ -396,6 +396,7 @@ impl ConsumerProject {
         let components = react_analyzer.analyze();
         
         for component in components {
+            println!("component: {}", component.name);
             // Check if this component is from a source project
             let mut is_from_source = false;
             let mut source_project_name = None;
@@ -408,6 +409,8 @@ impl ConsumerProject {
                     break;
                 }
             }
+            println!("path: {}", path.display());
+            println!("is_from_source: {}", is_from_source);
 
             if is_from_source {
                 // Don't register the component again, just create dependencies
@@ -464,6 +467,8 @@ impl ConsumerProject {
                     HashMap::new(),
                 );
 
+                println!("child_components: {:?}", component.children);
+
                 // Create child components
                 let child_components: Vec<ComponentNode> = component
                     .children
@@ -486,29 +491,42 @@ impl ConsumerProject {
                     (*self.component_registry).add_component(base_component.clone(), self.project_name.clone());
 
                     for child in child_components {
+                        println!("child: {}", child.name);
                         // Check if the child component is from a source project
                         let mut child_is_from_source = false;
                         let mut child_source_project_name = None;
                         
                         for source_project in &self.source_projects {
-                            if child.file_path.starts_with(&source_project.project_root) {
-                                child_is_from_source = true;
-                                child_source_project_name = Some(source_project.project_name.clone());
-                                break;
+                            // Extract project name from the file path
+                            if let Some(path_str) = child.file_path.to_str() {
+                                if path_str.starts_with(&source_project.project_name) {
+                                    child_is_from_source = true;
+                                    child_source_project_name = Some(source_project.project_name.clone());
+                                    break;
+                                }
                             }
                         }
 
                         if child_is_from_source {
                             // Find the component in the source project
                             if let Some(child_source_project_name) = child_source_project_name {
-                                if let Some(source_component) = (*self.component_registry).find_component(&child.name, &child_source_project_name) {
-                                    (*self.component_registry).add_dependency(
-                                        base_component.id.clone(),
-                                        source_component.node.id,
-                                        Some(child_source_project_name),
-                                    ).unwrap_or_else(|e| {
-                                        Logger::error(&format!("Failed to add dependency: {}", e));
-                                    });
+                                if let Some(source_component) = unsafe {
+                                    (*self.component_registry).find_component(&child.name, &child_source_project_name)
+                                } {
+                                    unsafe {
+                                        (*self.component_registry).add_dependency(
+                                            base_component.id.clone(),
+                                            source_component.node.id,
+                                            Some(child_source_project_name),
+                                        ).unwrap_or_else(|e| {
+                                            Logger::error(&format!("Failed to add dependency: {}", e));
+                                        });
+                                    }
+                                } else {
+                                    Logger::error(&format!(
+                                        "Could not find component {} in source project {}",
+                                        child.name, child_source_project_name
+                                    ));
                                 }
                             }
                         } else {
@@ -581,11 +599,6 @@ impl Project for ConsumerProject {
             "Starting traversal of consumer project: {}",
             self.project_name
         ));
-
-        // First traverse all source projects
-        for source_project in &mut self.source_projects {
-            source_project.traverse(exclude, include);
-        }
 
         let walker = self.build_walker(&exclude_patterns, &include_patterns);
 
