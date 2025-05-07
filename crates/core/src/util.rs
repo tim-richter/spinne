@@ -8,6 +8,7 @@ pub fn is_pascal_case(name: &str) -> bool {
     name.chars().next().map_or(false, |c| c.is_uppercase())
 }
 
+/// Reduce a path to the node module name.
 pub fn reduce_to_node_module_name(path: &str) -> String {
     let last = path.split("node_modules/").last().unwrap().to_string();
     last.split('/').next().unwrap().to_string()
@@ -19,7 +20,7 @@ pub fn reduce_to_node_module_name(path: &str) -> String {
 pub fn replace_absolute_path_with_project_name(
     project_root: PathBuf,
     path: PathBuf,
-    prepend_with: &str,
+    prepend_with: String,
 ) -> PathBuf {
     if path.has_root() {
         let stripped_path = path.strip_prefix(project_root);
@@ -81,7 +82,7 @@ mod tests {
             replace_absolute_path_with_project_name(
                 PathBuf::from("/Users/asht/Projects/spinne"),
                 PathBuf::from("/Users/asht/Projects/spinne/src/main.tsx"),
-                "test-project"
+                "test-project".to_string()
             ),
             PathBuf::from("test-project/src/main.tsx")
         );
@@ -93,7 +94,7 @@ mod tests {
             replace_absolute_path_with_project_name(
                 PathBuf::from("/Users/asht/Projects/spinne"),
                 PathBuf::from("src/main.tsx"),
-                "test-project"
+                "test-project".to_string()
             ),
             PathBuf::from("src/main.tsx")
         );

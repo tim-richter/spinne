@@ -2,6 +2,7 @@ use std::path::PathBuf;
 
 use oxc_resolver::{Resolution, ResolveOptions, Resolver, TsconfigOptions, TsconfigReferences};
 
+#[derive(Clone)]
 pub struct ProjectResolver {
     tsconfig_path: Option<PathBuf>,
 }
@@ -188,6 +189,43 @@ mod tests {
         assert_eq!(
             resolution.unwrap().path(),
             temp_dir.path().join("node_modules/framer-motion/index.js")
+        );
+    }
+
+    #[test]
+    fn test_resolve_file_path_with_node_modules_in_sub_directory() {
+        let temp_dir = test_utils::create_mock_project(&vec![
+            (
+                "node_modules/@radix-ui/react-accordion/package.json",
+                r#"{
+                    "name": "@radix-ui/react-accordion",
+                    "main": "dist/index.js"
+                }"#,
+            ),
+            (
+                "node_modules/@radix-ui/react-accordion/dist/index.js",
+                "module.exports = { Accordion: () => <div>Accordion</div> };",
+            ),
+            (
+                "src/components/Button.tsx",
+                "export function Button() { return <div>Button</div>; }",
+            ),
+            (
+                "src/components/index.ts",
+                "import { Button } from './Button';",
+            ),
+        ]);
+
+        let specifier = "@radix-ui/react-accordion";
+        let resolver = ProjectResolver::new(None);
+        let resolution = resolver.resolve(&temp_dir.path().join("src"), &specifier);
+
+        assert!(resolution.is_ok());
+        assert_eq!(
+            resolution.unwrap().path(),
+            temp_dir
+                .path()
+                .join("node_modules/@radix-ui/react-accordion/dist/index.js")
         );
     }
 

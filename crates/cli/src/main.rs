@@ -9,10 +9,24 @@ use spinne_html::HtmlGenerator;
 #[command(version, about, long_about = None)]
 struct Args {
     /// Entry point directory
+    /// 
+    /// This is only the starting point of the analysis and spinne will traverse all projects in this directory.
     #[arg(short, long, default_value = "./")]
     entry: PathBuf,
 
-    /// output format
+    /// Output format for the report
+    /// 
+    /// - file: Outputs a JSON file (spinne-report.json) containing the component graph.
+    ///   The JSON structure includes:
+    ///   - An array of project objects, each containing:
+    ///     - name: The project name
+    ///     - graph: A component graph containing:
+    ///       - components: Array of component objects with id, name, path, props, and project
+    ///       - edges: Array of edge objects with from and to component IDs
+    /// 
+    /// - console: Prints the report directly to the console in a human-readable format
+    /// 
+    /// - html: Generates an interactive HTML report (spinne-report.html)
     #[arg(short, long, default_value = "file")]
     format: Format,
 
@@ -35,8 +49,11 @@ struct Args {
 
 #[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, clap::ValueEnum, Debug)]
 enum Format {
+    /// Outputs a JSON file containing the component graph
     File,
+    /// Prints the report directly to the console
     Console,
+    /// Generates an interactive HTML report
     Html,
 }
 
@@ -53,17 +70,9 @@ fn main() -> std::io::Result<()> {
     workspace.discover_projects();
     workspace.traverse_projects(&args.exclude, &args.include);
 
-    // Create a serializable structure containing all project graphs
-    let workspace_data = workspace
-        .get_projects()
-        .iter()
-        .map(|project| {
-            serde_json::json!({
-                "name": project.project_name,
-                "graph": project.component_graph.to_serializable()
-            })
-        })
-        .collect::<Vec<_>>();
+    // Get the shared component registry
+    let registry = workspace.get_component_registry();
+    let serializable_data = registry.to_serializable();
 
     // output to json file in current working directory
     if args.format == Format::File {
@@ -76,18 +85,13 @@ fn main() -> std::io::Result<()> {
         ));
 
         let file = File::create(output_path_with_extension)?;
-        serde_json::to_writer_pretty(file, &workspace_data)?;
+        serde_json::to_writer_pretty(file, &serializable_data)?;
     }
 
     // output to console
     if args.format == Format::Console {
         Logger::info("Printing report to console:");
-        for project_data in workspace_data.iter() {
-            println!(
-                "Project '{}': {:#?}",
-                project_data["name"], project_data["graph"]
-            );
-        }
+        println!("{:#?}", serializable_data);
     }
 
     // output to html file in current working directory
@@ -100,7 +104,7 @@ fn main() -> std::io::Result<()> {
             output_path_with_extension
         ));
 
-        match HtmlGenerator::new(serde_json::to_value(workspace_data).unwrap())
+        match HtmlGenerator::new(serde_json::to_value(serializable_data).unwrap())
             .save(&output_path_with_extension)
         {
             Ok(_) => Logger::info(&format!(

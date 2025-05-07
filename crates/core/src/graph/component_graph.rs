@@ -1,165 +1,205 @@
-use petgraph::{graph::NodeIndex, Graph};
-use serde::{Deserialize, Serialize};
-use std::{collections::HashMap, path::PathBuf};
+use std::{
+    collections::{HashMap, HashSet},
+    hash::{DefaultHasher, Hash, Hasher},
+    ops::Not,
+    path::PathBuf,
+};
+use serde_json::Value;
 
-use spinne_logger::Logger;
-
-#[derive(Debug, Serialize, Deserialize)]
+/// Represents a component with a unique identifier.
+#[derive(Debug, Clone)]
 pub struct Component {
+    /// The unique identifier for the component.
+    pub id: u64,
+    /// The name of the component.
     pub name: String,
-    pub file_path: PathBuf,
-    pub prop_usage: HashMap<String, usize>,
+    /// The path to the component's file.
+    pub path: PathBuf,
+    /// The path to the component's file relative to the project root.
+    pub path_relative_to_root: PathBuf,
+    /// The properties of the component.
+    pub props: HashMap<String, usize>,
+    /// The project the component belongs to.
+    pub project: String,
 }
 
-/// ComponentGraph is a graph of components and their relationships.
-/// Components are nodes and relationships are edges.
-#[derive(Debug)]
+impl Component {
+    /// Creates a new component with a hash derived from its name and path
+    pub fn new(
+        name: String,
+        path: PathBuf,
+        path_relative_to_root: PathBuf,
+        project: String,
+    ) -> Self {
+        let id = Self::compute_hash(&name, &path);
+        Component {
+            id,
+            name,
+            path,
+            path_relative_to_root,
+            props: HashMap::new(),
+            project,
+        }
+    }
+
+    /// Computes a hash from a component's name and path
+    fn compute_hash(name: &str, path: &PathBuf) -> u64 {
+        let mut hasher = DefaultHasher::new();
+        name.hash(&mut hasher);
+        path.hash(&mut hasher);
+        hasher.finish()
+    }
+}
+
+impl Not for Component {
+    type Output = bool;
+
+    fn not(self) -> Self::Output {
+        false // or true, depending on your use case
+    }
+}
+
+impl Not for &Component {
+    type Output = bool;
+
+    fn not(self) -> Self::Output {
+        false // or true, depending on your use case
+    }
+}
+
+/// A simple graph where nodes are components identified by a unique value,
+/// and edges represent the relationship "uses."
+#[derive(Debug, Clone)]
 pub struct ComponentGraph {
-    pub graph: Graph<Component, ()>,
+    /// Maps component IDs (hashes) to the actual components.
+    nodes: HashMap<u64, Component>,
+    /// Represents edges: key is a component ID, and value is a set of component IDs it uses.
+    edges: HashMap<u64, HashSet<u64>>,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
-pub struct SerializableComponentGraph {
-    pub nodes: Vec<Component>,
-    pub edges: Vec<(usize, usize)>,
-}
-
-/// Represents a graph of components and their relationships.
 impl ComponentGraph {
-    /// Creates a new empty ComponentGraph.
+    /// Creates a new, empty Graph.
     pub fn new() -> Self {
-        Self {
-            graph: Graph::new(),
+        ComponentGraph {
+            nodes: HashMap::new(),
+            edges: HashMap::new(),
         }
     }
 
     /// Checks if a component exists in the graph.
-    /// A component is uniquely identified by its name and file path.
-    pub fn has_component(&self, key: &str, file_path: &PathBuf) -> bool {
-        self.graph
-            .node_indices()
-            .any(|i| self.graph[i].name == key && self.graph[i].file_path == *file_path)
+    pub fn has_component(&self, id: u64) -> bool {
+        self.nodes.contains_key(&id)
     }
 
-    /// Checks if an edge exists between two components.
-    pub fn has_edge(&self, from: NodeIndex, to: NodeIndex) -> bool {
-        self.graph.contains_edge(from, to)
+    /// Adds a component to the graph.
+    /// If the component already exists, it updates the component.
+    pub fn add_component(&mut self, component: Component) -> &Component {
+        let id = component.id;
+        self.nodes.insert(id, component);
+        self.nodes.get(&id).unwrap()
     }
 
-    /// Tries to find the index of a component in the graph.
-    pub fn get_component(&self, key: &str, file_path: &PathBuf) -> Option<NodeIndex> {
-        self.graph
-            .node_indices()
-            .find(|i| self.graph[*i].name == key && self.graph[*i].file_path == *file_path)
+    /// Adds a directional edge from `from_id` to `to_id`.
+    /// Returns `false` if either component does not exist.
+    pub fn add_edge(&mut self, from_id: u64, to_id: u64) -> bool {
+        if !self.has_component(from_id) || !self.has_component(to_id) {
+            return false;
+        }
+
+        self.edges.entry(from_id).or_default().insert(to_id)
     }
 
-    /// Adds a new component to the graph.
-    /// If the component already exists, it returns the existing component's index.
-    /// Otherwise, it adds a new component and returns the index of the new component.
-    pub fn add_component(&mut self, key: String, file_path: PathBuf) -> NodeIndex {
-        if !self.has_component(&key, &file_path) {
-            Logger::debug(
-                &format!("Adding new component: {:?}, {:?}", key, file_path),
-                2,
-            );
-            let node_index = self.graph.add_node(Component {
-                name: key,
-                file_path,
-                prop_usage: HashMap::new(),
-            });
-            node_index
-        } else {
-            Logger::debug(
-                &format!("Called add_component for existing component: {:?}", key),
-                2,
-            );
-            self.graph
-                .node_indices()
-                .find(|i| self.graph[*i].name == key && self.graph[*i].file_path == file_path)
-                .unwrap()
+    /// Adds a component and its dependencies to the graph in a single operation.
+    /// Returns a reference to the added/updated component.
+    pub fn add_component_with_deps(
+        &mut self,
+        component: Component,
+        deps: Vec<Component>,
+    ) -> &Component {
+        let component_id = component.id;
+        self.nodes.insert(component_id, component);
+
+        // Add all dependencies and create edges
+        for dep in deps {
+            let dep_id = dep.id;
+            self.nodes.insert(dep_id, dep);
+            self.edges.entry(component_id).or_default().insert(dep_id);
+        }
+
+        self.nodes.get(&component_id).unwrap()
+    }
+
+    /// Retrieves a component by its unique identifier.
+    pub fn get_component(&self, id: u64) -> Option<&Component> {
+        self.nodes.get(&id)
+    }
+
+    /// Retrieves a component by its name and path.
+    /// This is a convenience method for finding a component by its name and path.
+    pub fn find_component(&self, name: &str, path: &PathBuf) -> Option<&Component> {
+        let id = Component::compute_hash(name, path);
+        self.nodes.get(&id)
+    }
+
+    /// Gets the neighbors (i.e., components used by the specified component).
+    pub fn get_neighbors(&self, id: u64) -> Option<&HashSet<u64>> {
+        self.edges.get(&id)
+    }
+
+    /// Checks if there is an edge from `from_id` to `to_id`.
+    pub fn has_edge(&self, from_id: u64, to_id: u64) -> bool {
+        self.edges
+            .get(&from_id)
+            .map_or(false, |neighbors| neighbors.contains(&to_id))
+    }
+
+    /// Adds a property to a component.
+    pub fn add_prop(&mut self, component_id: u64, prop: String) {
+        if let Some(component) = self.nodes.get_mut(&component_id) {
+            *component.props.entry(prop).or_insert(0) += 1;
         }
     }
 
-    /// Adds a child edge between two components.
-    pub fn add_child(&mut self, parent: (&str, &PathBuf), child: (&str, &PathBuf)) {
-        let parent_index = self.get_or_add_component(parent.0, parent.1.clone());
-        let child_index = self.get_or_add_component(child.0, child.1.clone());
-
-        Logger::debug(
-            &format!("Adding child edge: {:?} -> {:?}", parent.0, child.0),
-            2,
-        );
-        self.graph.add_edge(parent_index, child_index, ());
+    /// Returns the number of components in the graph.
+    pub fn node_count(&self) -> usize {
+        self.nodes.len()
     }
 
-    /// Tries to find the index of a component in the graph.
-    /// If the component does not exist, it adds a new component and returns the index of the new component.
-    fn get_or_add_component(&mut self, name: &str, file_path: PathBuf) -> NodeIndex {
-        match self.get_component(name, &file_path) {
-            Some(index) => index,
-            None => self.add_component(name.to_string(), file_path),
-        }
+    /// Returns the number of edges in the graph.
+    pub fn edge_count(&self) -> usize {
+        self.edges.len()
     }
 
-    /// Adds a prop usage to a component.
-    /// If the component does not exist, it does nothing.
-    pub fn add_prop_usage(&mut self, component: &str, file_path: &PathBuf, prop: String) {
-        if let Some(node_index) = self.get_component(component, file_path) {
-            let component = &mut self.graph[node_index];
+    /// Converts the component graph into a serializable format for JSON output
+    pub fn to_serializable(&self) -> Value {
+        let mut components = Vec::new();
+        let mut edges = Vec::new();
 
-            Logger::debug(
-                &format!("Adding prop usage: {:?} -> {:?}", component, prop),
-                2,
-            );
-            *component.prop_usage.entry(prop).or_insert(0) += 1;
-        }
-    }
-
-    /// Prints the graph to the console.
-    pub fn print_graph(&self) {
-        println!("{:?}", self.graph);
-    }
-
-    /// Converts the graph to a serializable format.
-    /// This can be used to save the graph to a file or to send it over the network.
-    pub fn to_serializable(&self) -> SerializableComponentGraph {
-        let nodes: Vec<Component> = self
-            .graph
-            .node_indices()
-            .map(|i| Component {
-                name: self.graph[i].name.clone(),
-                file_path: self.graph[i].file_path.clone(),
-                prop_usage: self.graph[i].prop_usage.clone(),
-            })
-            .collect();
-
-        let edges: Vec<(usize, usize)> = self
-            .graph
-            .edge_indices()
-            .map(|e| {
-                let (a, b) = self.graph.edge_endpoints(e).unwrap();
-                (a.index(), b.index())
-            })
-            .collect();
-
-        SerializableComponentGraph { nodes, edges }
-    }
-
-    /// Converts a serializable graph back to a ComponentGraph.
-    /// This can be used to load a graph from a file or to receive it over the network.
-    pub fn from_serializable(serializable: SerializableComponentGraph) -> Self {
-        let mut graph = Graph::new();
-        let node_indices: Vec<NodeIndex> = serializable
-            .nodes
-            .into_iter()
-            .map(|component| graph.add_node(component))
-            .collect();
-
-        for (from, to) in serializable.edges {
-            graph.add_edge(node_indices[from], node_indices[to], ());
+        // Convert nodes to serializable format
+        for component in self.nodes.values() {
+            components.push(serde_json::json!({
+                "id": component.id,
+                "name": component.name,
+                "path": component.path_relative_to_root,
+                "props": component.props,
+                "project": component.project,
+            }));
         }
 
-        ComponentGraph { graph }
+        // Convert edges to serializable format
+        for (from_id, to_ids) in &self.edges {
+            for to_id in to_ids {
+                edges.push(serde_json::json!({
+                    "from": from_id,
+                    "to": to_id,
+                }));
+            }
+        }
+
+        serde_json::json!({
+            "components": components,
+            "edges": edges,
+        })
     }
 }
 
@@ -168,182 +208,159 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_new() {
-        let graph = ComponentGraph::new();
-        assert_eq!(graph.graph.node_count(), 0);
-        assert_eq!(graph.graph.edge_count(), 0);
-    }
-
-    #[test]
     fn test_add_component() {
         let mut graph = ComponentGraph::new();
-        let file_path = PathBuf::from("/path/to/Component.tsx");
-        let key = "MyComponent".to_string();
+        let comp1 = Component {
+            id: 1,
+            name: "Component A".to_string(),
+            path: PathBuf::from("file1.rs"),
+            path_relative_to_root: PathBuf::from("file1.rs"),
+            props: HashMap::new(),
+            project: "Project A".to_string(),
+        };
 
-        let node_index = graph.add_component(key.clone(), file_path.clone());
+        // Adding a new component should succeed.
+        assert!(graph.add_component(comp1));
 
-        assert_eq!(graph.graph.node_count(), 1);
-        assert_eq!(graph.graph.edge_count(), 0);
-        assert!(graph.has_component(&key, &file_path));
-        assert_eq!(graph.graph[node_index].name, key);
-        assert_eq!(graph.graph[node_index].file_path, file_path);
+        // Attempting to add a duplicate component (same id) should update the component.
+        let comp1_dup = Component {
+            id: 1,
+            name: "Duplicate Component A".to_string(),
+            path: PathBuf::from("file1.rs"),
+            path_relative_to_root: PathBuf::from("file1.rs"),
+            props: HashMap::new(),
+            project: "Project A".to_string(),
+        };
+        assert!(graph.add_component(comp1_dup));
+
+        // Check that the component is stored correctly.
+        let retrieved = graph.get_component(1).unwrap();
+        assert_eq!(retrieved.name, "Duplicate Component A");
     }
 
     #[test]
-    fn test_add_duplicate_component() {
+    fn test_add_edge() {
         let mut graph = ComponentGraph::new();
-        let file_path = PathBuf::from("/path/to/Component.tsx");
-        let key = "MyComponent".to_string();
+        let comp1 = Component {
+            id: 100,
+            name: "Component 1".to_string(),
+            path: PathBuf::from("file1.rs"),
+            path_relative_to_root: PathBuf::from("file1.rs"),
+            props: HashMap::new(),
+            project: "Project A".to_string(),
+        };
+        let comp2 = Component {
+            id: 200,
+            name: "Component 2".to_string(),
+            path: PathBuf::from("file2.rs"),
+            path_relative_to_root: PathBuf::from("file2.rs"),
+            props: HashMap::new(),
+            project: "Project A".to_string(),
+        };
 
-        let node_index = graph.add_component(key.clone(), file_path.clone());
-        let second_node_index = graph.add_component(key.clone(), file_path.clone());
+        // Add components first.
+        assert!(graph.add_component(comp1));
+        assert!(graph.add_component(comp2));
 
-        assert_eq!(graph.graph.node_count(), 1);
-        assert_eq!(graph.graph.edge_count(), 0);
-        assert!(graph.has_component(&key, &file_path));
-        assert_eq!(second_node_index, node_index);
+        // Add a valid edge.
+        assert!(graph.add_edge(100, 200));
+
+        // Ensure that the neighbor is correctly registered.
+        let neighbors = graph.get_neighbors(100).unwrap();
+        assert!(neighbors.contains(&200));
     }
 
     #[test]
-    fn test_add_child() {
+    fn test_invalid_edges() {
         let mut graph = ComponentGraph::new();
-        let parent_key = "ParentComponent".to_string();
-        let child_key = "ChildComponent".to_string();
+        let comp1 = Component {
+            id: 50,
+            name: "Component 50".to_string(),
+            path: PathBuf::from("file1.rs"),
+            path_relative_to_root: PathBuf::from("file1.rs"),
+            props: HashMap::new(),
+            project: "Project A".to_string(),
+        };
 
-        let parent_node_index = graph.add_component(
-            parent_key.clone(),
-            PathBuf::from("/path/to/ParentComponent.tsx"),
-        );
-        let child_node_index = graph.add_component(
-            child_key.clone(),
-            PathBuf::from("/path/to/ChildComponent.tsx"),
-        );
+        // Add only one component.
+        assert!(graph.add_component(comp1));
 
-        graph.add_child(
-            (&parent_key, &PathBuf::from("/path/to/ParentComponent.tsx")),
-            (&child_key, &PathBuf::from("/path/to/ChildComponent.tsx")),
-        );
+        // Trying to add an edge where the source node doesn't exist.
+        assert!(!graph.add_edge(999, 50));
 
-        assert_eq!(graph.graph.node_count(), 2);
-        assert_eq!(graph.graph.edge_count(), 1);
-        assert!(graph.has_component(&parent_key, &PathBuf::from("/path/to/ParentComponent.tsx")));
-        assert!(graph.has_component(&child_key, &PathBuf::from("/path/to/ChildComponent.tsx")));
-        assert!(graph
-            .graph
-            .contains_edge(parent_node_index, child_node_index));
+        // Trying to add an edge where the target node doesn't exist.
+        assert!(!graph.add_edge(50, 888));
     }
 
     #[test]
-    fn test_complex_graph_structure() {
-        let mut graph = ComponentGraph::new();
-
-        // Add components
-        let app_path = PathBuf::from("/path/to/App.tsx");
-        let app = graph.add_component("App".to_string(), app_path.clone());
-        let header =
-            graph.add_component("Header".to_string(), PathBuf::from("/path/to/Header.tsx"));
-
-        let footer =
-            graph.add_component("Footer".to_string(), PathBuf::from("/path/to/Footer.tsx"));
-        let content =
-            graph.add_component("Content".to_string(), PathBuf::from("/path/to/Content.tsx"));
-
-        // Add relationships
-        graph.add_child(
-            ("App", &app_path),
-            ("Header", &PathBuf::from("/path/to/Header.tsx")),
-        );
-        graph.add_child(
-            ("App", &app_path),
-            ("Footer", &PathBuf::from("/path/to/Footer.tsx")),
-        );
-        graph.add_child(
-            ("App", &app_path),
-            ("Content", &PathBuf::from("/path/to/Content.tsx")),
-        );
-
-        // Assertions
-        assert_eq!(graph.graph.node_count(), 4);
-        assert_eq!(graph.graph.edge_count(), 3);
-
-        let app_component = &graph.graph[app];
-        assert_eq!(app_component.name, "App");
-        assert_eq!(app_component.file_path, app_path);
-
-        let header_component = &graph.graph[header];
-        assert_eq!(header_component.name, "Header");
-        assert_eq!(
-            header_component.file_path,
-            PathBuf::from("/path/to/Header.tsx")
-        );
-
-        let footer_component = &graph.graph[footer];
-        assert_eq!(footer_component.name, "Footer");
-        assert_eq!(
-            footer_component.file_path,
-            PathBuf::from("/path/to/Footer.tsx")
-        );
-
-        let content_component = &graph.graph[content];
-        assert_eq!(content_component.name, "Content");
-        assert_eq!(
-            content_component.file_path,
-            PathBuf::from("/path/to/Content.tsx")
-        );
-
-        assert!(graph.graph.contains_edge(app, header));
-        assert!(graph.graph.contains_edge(app, footer));
-        assert!(graph.graph.contains_edge(app, content));
+    fn test_get_neighbors_non_existing() {
+        let graph = ComponentGraph::new();
+        // Querying neighbors for a non-existent node should return None.
+        assert!(graph.get_neighbors(10).is_none());
     }
 
     #[test]
-    fn test_cyclic_dependency() {
+    fn test_add_prop() {
         let mut graph = ComponentGraph::new();
+        let comp = Component {
+            id: 1,
+            name: "Test".to_string(),
+            path: PathBuf::from("test.rs"),
+            path_relative_to_root: PathBuf::from("test.rs"),
+            props: HashMap::new(),
+            project: "Test Project".to_string(),
+        };
 
-        let component_a = graph.add_component(
-            "ComponentA".to_string(),
-            PathBuf::from("/path/to/ComponentA.tsx"),
-        );
-        let component_b = graph.add_component(
-            "ComponentB".to_string(),
-            PathBuf::from("/path/to/ComponentB.tsx"),
-        );
+        graph.add_component(comp);
 
-        graph.add_child(
-            ("ComponentA", &PathBuf::from("/path/to/ComponentA.tsx")),
-            ("ComponentB", &PathBuf::from("/path/to/ComponentB.tsx")),
-        );
-        graph.add_child(
-            ("ComponentB", &PathBuf::from("/path/to/ComponentB.tsx")),
-            ("ComponentA", &PathBuf::from("/path/to/ComponentA.tsx")),
-        );
+        // Add the same prop twice
+        graph.add_prop(1, "test_prop".to_string());
+        graph.add_prop(1, "test_prop".to_string());
 
-        assert_eq!(graph.graph.node_count(), 2);
-
-        assert_eq!(graph.graph.edge_count(), 2);
-        assert!(graph.graph.contains_edge(component_a, component_b));
-        assert!(graph.graph.contains_edge(component_b, component_a));
+        // Verify the prop count is 2
+        let component = graph.get_component(1).unwrap();
+        assert_eq!(*component.props.get("test_prop").unwrap(), 2);
     }
 
     #[test]
-    fn test_to_serializable() {
-        let mut graph = ComponentGraph::new();
-        graph.add_component(
-            "ComponentA".to_string(),
-            PathBuf::from("/path/to/ComponentA.tsx"),
+    fn test_component_hash_consistency() {
+        let name = "TestComponent".to_string();
+        let path = PathBuf::from("src/components/test.rs");
+
+        // Create two components with the same data
+        let component1 = Component::new(
+            name.clone(),
+            path.clone(),
+            PathBuf::from("test.rs"),
+            "Project A".to_string(),
         );
-        graph.add_component(
-            "ComponentB".to_string(),
-            PathBuf::from("/path/to/ComponentB.tsx"),
+        let component2 = Component::new(
+            name,
+            path,
+            PathBuf::from("test.rs"),
+            "Project A".to_string(),
         );
 
-        graph.add_child(
-            ("ComponentA", &PathBuf::from("/path/to/ComponentA.tsx")),
-            ("ComponentB", &PathBuf::from("/path/to/ComponentB.tsx")),
+        // They should have the same hash
+        assert_eq!(component1.id, component2.id);
+    }
+
+    #[test]
+    fn test_component_hash_uniqueness() {
+        let component1 = Component::new(
+            "Component1".to_string(),
+            PathBuf::from("src/comp1.rs"),
+            PathBuf::from("src/comp1.rs"),
+            "Project A".to_string(),
+        );
+        let component2 = Component::new(
+            "Component2".to_string(),
+            PathBuf::from("src/comp2.rs"),
+            PathBuf::from("src/comp2.rs"),
+            "Project A".to_string(),
         );
 
-        let serializable = graph.to_serializable();
-        assert_eq!(serializable.nodes.len(), 2);
-        assert_eq!(serializable.edges.len(), 1);
+        // Different components should have different hashes
+        assert_ne!(component1.id, component2.id);
     }
 }

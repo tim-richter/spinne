@@ -29,42 +29,54 @@ Spinne can analyze both single React projects and workspaces containing multiple
 ```json
 [
   {
-    "name": "ui-components",
+    "name": "source-lib",
     "graph": {
-      "nodes": [
+      "components": [
         {
+          "id": 11611080489164640768,
           "name": "Button",
-          "file_path": "packages/ui-components/src/components/Button.tsx",
-          "prop_usage": {}
-        },
-        {
-          "name": "ButtonGroup",
-          "file_path": "packages/ui-components/src/components/ButtonGroup.tsx",
-          "prop_usage": {}
+          "path": "source-lib/src/components/Button.tsx",
+          "props": {
+            "label": 1,
+            "onClick": 1
+          },
+          "project": "source-lib"
         }
       ],
-      "edges": [
-        [1, 0]
-      ]
+      "edges": []
     }
   },
   {
-    "name": "main-app",
+    "name": "consumer-app",
     "graph": {
-      "nodes": [
+      "components": [
         {
-          "name": "LoginForm",
-          "file_path": "packages/main-app/src/features/auth/LoginForm.tsx",
-          "prop_usage": {}
+          "id": 14300231078674835378,
+          "name": "App",
+          "path": "consumer-app/src/App.tsx",
+          "props": {},
+          "project": "consumer-app"
         }
       ],
-      "edges": [[0, 0]]
+      "edges": [
+        {
+          "from": 14300231078674835378,
+          "to": 11611080489164640768,
+          "project_context": "source-lib"
+        }
+      ]
     }
   }
 ]
 ```
 
-For the graph, we use a directed adjacency graph where relationships between components are represented by edges. For example, an edge from ButtonGroup to Button (represented as `[1, 0]` in the edges array) means that ButtonGroup uses the Button component.
+For the graph, we use a directed graph where relationships between components are represented by edges. Each component has a unique ID and belongs to a specific project. Edges can be within the same project or across projects, with the `project_context` field indicating when a component depends on a component from another project.
+
+In this example:
+- The `Button` component is defined in the `source-lib` project
+- The `App` component in `consumer-app` uses the `Button` component
+- The edge from `App` to `Button` includes `project_context: "source-lib"` to indicate it's a cross-project dependency
+- Component props are tracked with usage counts (e.g., `"label": 1` means the prop is used once)
 
 ## Installation
 
@@ -96,6 +108,13 @@ spinne -f html
 ```
 This will create 'spinne-report.html' and automatically open it in your default browser.
 
+To analyze specific entry points for exports:
+
+```bash
+spinne --entry-points src/index.tsx,src/components/index.ts
+```
+This will analyze the specified files for exported components before performing the normal component graph analysis.
+
 ## Options
 
 | Option | Description | Options | Default |
@@ -104,6 +123,7 @@ This will create 'spinne-report.html' and automatically open it in your default 
 | `-f, --format <format>` | Output format | `file`, `console`, `html` | `file` |
 | `--exclude <patterns>` | Glob patterns to exclude | comma separated patterns | `**/node_modules/**,**/dist/**,**/build/**,**/*.stories.tsx,**/*.test.tsx` |
 | `--include <patterns>` | Glob patterns to include | comma separated patterns | `**/*.tsx` |
+| `--entry-points <paths>` | Files to analyze for exports | comma separated paths | none |
 | `-l` | Verbosity level | Use multiple times (-l, -ll, etc.) | 0 |
 
 ## Configuration File
@@ -114,7 +134,8 @@ Example `spinne.json`:
 ```json
 {
   "include": ["**/*.tsx", "**/*.ts"],
-  "exclude": ["**/node_modules/**", "**/dist/**", "**/*.test.tsx"]
+  "exclude": ["**/node_modules/**", "**/dist/**", "**/*.test.tsx"],
+  "entry_points": ["src/index.tsx", "src/components/index.ts"]
 }
 ```
 
@@ -124,6 +145,7 @@ Example `spinne.json`:
 | --- | --- | --- |
 | `include` | Array of glob patterns for files to include in the analysis | `string[]` |
 | `exclude` | Array of glob patterns for files to exclude from the analysis | `string[]` |
+| `entry_points` | Array of file paths to analyze for exports | `string[]` |
 
 The configuration file options will be merged with any command line arguments you provide. For example, if you specify both exclude patterns in your `spinne.json` and via the `--exclude` flag, both sets of patterns will be used.
 

@@ -1,7 +1,8 @@
-mod project;
+mod package;
+pub mod project_types;
 mod resolver;
 mod workspace;
 
-pub use project::Project;
-pub use resolver::ProjectResolver;
-pub use workspace::Workspace;
+pub use package::*;
+pub use resolver::*;
+pub use workspace::*;
