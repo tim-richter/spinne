@@ -303,8 +303,7 @@ impl ComponentRegistry {
                 "id": id,
                 "name": info.node.name,
                 "path": info.node.file_path,
-                "props": info.node.props,
-                "project": info.project
+                "props": info.node.props
             });
             entry["components"].as_array_mut().unwrap().push(component_json);
 

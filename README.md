@@ -39,8 +39,7 @@ Spinne can analyze both single React projects and workspaces containing multiple
           "props": {
             "label": 1,
             "onClick": 1
-          },
-          "project": "source-lib"
+          }
         }
       ],
       "edges": []
@@ -54,8 +53,7 @@ Spinne can analyze both single React projects and workspaces containing multiple
           "id": 14300231078674835378,
           "name": "App",
           "path": "consumer-app/src/App.tsx",
-          "props": {},
-          "project": "consumer-app"
+          "props": {}
         }
       ],
       "edges": [
@@ -70,7 +68,7 @@ Spinne can analyze both single React projects and workspaces containing multiple
 ]
 ```
 
-For the graph, we use a directed graph where relationships between components are represented by edges. Each component has a unique ID and belongs to a specific project. Edges can be within the same project or across projects, with the `project_context` field indicating when a component depends on a component from another project.
+For the graph, we use a directed graph where relationships between components are represented by edges. Each component has a unique ID and belongs to a project (indicated by the outer `name` field). Edges can be within the same project or across projects, with the `project_context` field indicating when a component depends on a component from another project.
 
 In this example:
 - The `Button` component is defined in the `source-lib` project
