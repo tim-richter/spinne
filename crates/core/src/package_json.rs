@@ -191,6 +191,25 @@ mod tests {
     }
 
     #[test]
+    fn test_read_package_json_with_invalid_name() {
+        let temp_dir = create_mock_project(&vec![(
+            "package.json",
+            r#"
+            {
+                "name": 123,
+                "version": "1.0.0",
+                "workspaces": ["packages/*"]
+            }
+            "#,
+        )]);
+
+        let package_json =
+            PackageJson::read(&PathBuf::from(temp_dir.path().join("package.json")), true)
+                .expect("Failed to read package.json");
+        assert_eq!(package_json.name, None);
+    }
+
+    #[test]
     fn test_missing_package_json() {
         assert!(PackageJson::read(&PathBuf::from("package.json"), true).is_none());
     }
@@ -225,7 +244,8 @@ mod tests {
                 "name": "test-project",
                 "version": "1.0.0",
                 "dependencies": { "react": "18.3.1" },
-                "devDependencies": { "typescript": "5.0.0" }
+                "devDependencies": { "typescript": "5.0.0" },
+                "peerDependencies": { "react-dom": "18.3.1" }
             }
             "#,
         )]);
@@ -241,6 +261,16 @@ mod tests {
             package_json.dev_dependencies,
             Some(HashSet::from(["typescript".to_string()]))
         );
+        assert_eq!(
+            package_json.peer_dependencies,
+            Some(HashSet::from(["react-dom".to_string()]))
+        );
+
+        assert_eq!(package_json.get_all_dependencies(), Some(HashSet::from([
+            "react".to_string(),
+            "typescript".to_string(),
+            "react-dom".to_string(),
+        ])));
     }
 
     #[test]
