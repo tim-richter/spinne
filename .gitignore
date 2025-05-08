@@ -9,3 +9,6 @@ debug/
 .env
 tarpaulin-report.html
 test.html
+
+.vscode
+.lcov.info
