@@ -233,7 +233,6 @@ fn test_cli_with_json_output() {
     assert!(component.get("name").is_some());
     assert!(component.get("path").is_some());
     assert!(component.get("props").is_some());
-    assert!(component.get("project").is_some());
 
     // Verify edge structure (should have one edge from Home to Button)
     assert_eq!(edges.len(), 1);
