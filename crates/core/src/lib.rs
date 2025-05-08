@@ -9,6 +9,6 @@ mod util;
 pub use config::Config;
 pub use graph::ComponentGraph;
 pub use package_json::PackageJson;
-pub use traverse::project_types::{Project, SourceProject, ConsumerProject};
+pub use traverse::project_types::{ConsumerProject, Project, SourceProject};
 pub use traverse::ProjectResolver;
 pub use traverse::Workspace;

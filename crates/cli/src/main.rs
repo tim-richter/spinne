@@ -9,13 +9,13 @@ use spinne_html::HtmlGenerator;
 #[command(version, about, long_about = None)]
 struct Args {
     /// Entry point directory
-    /// 
+    ///
     /// This is only the starting point of the analysis and spinne will traverse all projects in this directory.
     #[arg(short, long, default_value = "./")]
     entry: PathBuf,
 
     /// Output format for the report
-    /// 
+    ///
     /// - file: Outputs a JSON file (spinne-report.json) containing the component graph.
     ///   The JSON structure includes:
     ///   - An array of project objects, each containing:
@@ -23,9 +23,9 @@ struct Args {
     ///     - graph: A component graph containing:
     ///       - components: Array of component objects with id, name, path, props, and project
     ///       - edges: Array of edge objects with from and to component IDs
-    /// 
+    ///
     /// - console: Prints the report directly to the console in a human-readable format
-    /// 
+    ///
     /// - html: Generates an interactive HTML report (spinne-report.html)
     #[arg(short, long, default_value = "file")]
     format: Format,

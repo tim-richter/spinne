@@ -87,32 +87,57 @@
             background: #f0f0f0;
         }
 
-        .project-selector-container {
+        .legend {
             position: fixed;
-            top: 20px;
-            left: 50%;
-            transform: translateX(-50%);
+            bottom: 20px;
+            left: 20px;
             z-index: 1000;
             background: white;
             padding: 10px;
             border-radius: 4px;
             box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            font-size: 12px;
+            max-width: 300px;
         }
 
-        .project-selector {
-            padding: 8px;
-            border: 1px solid #ccc;
-            border-radius: 4px;
+        .legend-title {
+            font-weight: bold;
+            margin-bottom: 8px;
             font-size: 14px;
-            min-width: 200px;
+        }
+
+        .legend-section {
+            margin-bottom: 12px;
+        }
+
+        .legend-section-title {
+            font-weight: bold;
+            margin-bottom: 4px;
+            color: #666;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            margin: 4px 0;
+        }
+
+        .legend-color {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            margin-right: 8px;
+            border: 1px solid rgba(0,0,0,0.1);
+        }
+
+        .legend-line {
+            width: 20px;
+            height: 2px;
+            margin-right: 8px;
         }
     </style>
 </head>
 <body>
-    <div class="project-selector-container">
-        <select class="project-selector" onchange="switchProject(this.value)">
-        </select>
-    </div>
     <div class="search-container">
         <input type="text" 
                class="search-input" 
@@ -123,97 +148,256 @@
         <button class="export-button" onclick="exportAsSVG()">Export SVG</button>
         <button class="export-button" onclick="exportAsPNG()">Export PNG</button>
     </div>
+    <div class="legend">
+        <div class="legend-title">Legend</div>
+        <div class="legend-section">
+            <div class="legend-section-title">Projects</div>
+            <div id="project-legend"></div>
+        </div>
+        <div class="legend-section">
+            <div class="legend-section-title">Dependencies</div>
+            <div class="legend-item">
+                <div class="legend-line" style="background: #999;"></div>
+                <span>Internal dependency</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-line" style="background: #ff7f0e;"></div>
+                <span>Cross-project dependency</span>
+            </div>
+        </div>
+    </div>
     <div id="graph"></div>
 
     <script>
-        (function initComponentGraph () {
-            const projectsData = {"projects":[{"nodes":[{"name":"ComponentA","file_path":"/path/to/ComponentA.tsx","prop_usage":{}},{"name":"ComponentB","file_path":"/path/to/ComponentB.tsx","prop_usage":{}}],"edges":[[0,1]]},{"nodes":[{"name":"ComponentC","file_path":"/path/to/ComponentC.tsx","prop_usage":{}}],"edges":[]}]};
-            let currentProjectIndex = 0
-            let simulation = null
+        (function initComponentGraph() {
+            const projectsData = [{"graph":{"components":[{"id":"11611080489164640768","name":"Button","path":"source-lib/src/components/Button.tsx","props":{"disabled":1,"label":1,"onClick":1,"variant":1}},{"id":"11611080489164640769","name":"Input","path":"source-lib/src/components/Input.tsx","props":{"onChange":1,"placeholder":1,"type":1,"value":1}},{"id":"11611080489164640770","name":"Card","path":"source-lib/src/components/Card.tsx","props":{"children":1,"padding":1,"title":1}},{"id":"11611080489164640771","name":"Modal","path":"source-lib/src/components/Modal.tsx","props":{"children":1,"isOpen":1,"onClose":1,"title":1}}],"edges":[{"from":"11611080489164640771","project_context":"source-lib","to":"11611080489164640770"},{"from":"11611080489164640771","project_context":"source-lib","to":"11611080489164640768"},{"from":"11611080489164640770","project_context":"source-lib","to":"11611080489164640768"},{"from":"11611080489164640770","project_context":"source-lib","to":"11611080489164640769"}]},"name":"source-lib"},{"graph":{"components":[{"id":"14300231078674835378","name":"App","path":"consumer-app/src/App.tsx","props":{}},{"id":"14300231078674835379","name":"LoginForm","path":"consumer-app/src/components/LoginForm.tsx","props":{"error":1,"onSubmit":1}},{"id":"14300231078674835380","name":"UserProfile","path":"consumer-app/src/components/UserProfile.tsx","props":{"onEdit":1,"user":1}},{"id":"14300231078674835381","name":"SettingsModal","path":"consumer-app/src/components/SettingsModal.tsx","props":{"isOpen":1,"onClose":1,"settings":1}}],"edges":[{"from":"14300231078674835378","project_context":"source-lib","to":"11611080489164640768"},{"from":"14300231078674835378","project_context":"consumer-app","to":"14300231078674835379"},{"from":"14300231078674835378","project_context":"consumer-app","to":"14300231078674835380"},{"from":"14300231078674835379","project_context":"source-lib","to":"11611080489164640768"},{"from":"14300231078674835379","project_context":"source-lib","to":"11611080489164640769"},{"from":"14300231078674835380","project_context":"source-lib","to":"11611080489164640770"},{"from":"14300231078674835380","project_context":"consumer-app","to":"14300231078674835381"},{"from":"14300231078674835381","project_context":"source-lib","to":"11611080489164640771"}]},"name":"consumer-app"}];
+            console.log('Projects data:', projectsData);
+            let simulation = null;
+            let globalNodeMap = new Map();
 
-						const width = window.innerWidth
-						const height = window.innerHeight
+            // Create color scale for projects
+            const projectColors = new Map();
+            const colorScale = d3.scaleOrdinal(d3.schemeCategory10);
+            projectsData.forEach((project, i) => {
+                projectColors.set(project.name, colorScale(i));
+            });
 
-						let svg = createSvg(width, height)
-						let g = svg.append('g')
+            // Initialize project legend
+            const projectLegend = document.getElementById('project-legend');
+            projectsData.forEach(project => {
+                const item = document.createElement('div');
+                item.className = 'legend-item';
+                item.innerHTML = `
+                    <div class="legend-color" style="background: ${projectColors.get(project.name)};"></div>
+                    <span>${project.name}</span>
+                `;
+                projectLegend.appendChild(item);
+            });
+
+            const width = window.innerWidth;
+            const height = window.innerHeight;
+
+            let svg = createSvg(width, height);
+            let g = svg.append('g');
 						// Store zoom behavior so we can programmatically transform
-						let zoom = setupZoom(svg, g)
+            let zoom = setupZoom(svg, g);
 
-            // Initialize project selector
-            const projectSelector = document.querySelector('.project-selector')
-            projectsData.forEach((project, index) => {
-                const option = document.createElement('option')
-                option.value = index;
-                option.text = project.name;
-                projectSelector.appendChild(option)
-            })
-
-            // Function to switch between projects
-            window.switchProject = function(projectIndex) {
-                currentProjectIndex = parseInt(projectIndex)
-                if (simulation) {
-                    simulation.stop()
-                }
-                // Clear existing graph
-                d3.select('#graph').select('svg').remove()
-								svg = createSvg(width, height)
-								g = svg.append('g')
-								zoom = setupZoom(svg, g)
-                // Initialize new graph with selected project data
-                initGraph(projectsData[currentProjectIndex])
-            }
-
-            function initGraph(graphData) {
-                // Assign a unique id (as a string) to each node
-                graphData.graph.nodes.forEach((node, i) => {
-                    node.id = String(i)
-                })
-
-                const incomingEdgeCounts = calculateIncomingEdgeCounts(graphData.graph.edges)
-                const tooltip = createTooltip()
-
-                addArrowheadMarker(svg)
-                simulation = createSimulation(width, height, graphData.graph.nodes, graphData.graph.edges)
-                renderGraph(graphData, { svg, g, simulation, tooltip, incomingEdgeCounts })
-            }
-
-            // Initialize first project
-            initGraph(projectsData[currentProjectIndex])
+            // Initialize graph with all components
+            initGraph(projectsData);
 
             // New search: mark nodes, update results list, and attach click to zoom.
-            window.filterNodes = function (searchTerm) {
-                const term = searchTerm.toLowerCase()
+            window.filterNodes = function(searchTerm) {
+                const term = searchTerm.toLowerCase();
                 d3.selectAll('.node-group')
                     .transition()
                     .duration(200)
-                    .attr('opacity', d => d.name.toLowerCase().includes(term) ? 1 : 0.2)
+                    .attr('opacity', d => d.name.toLowerCase().includes(term) ? 1 : 0.2);
                 d3.selectAll('.link')
                     .transition()
                     .duration(200)
                     .attr('opacity', d =>
                         (d.source.name.toLowerCase().includes(term) ||
-                         d.target.name.toLowerCase().includes(term)) ? 1 : 0.2)
-                updateSearchResults(term, projectsData[currentProjectIndex])
+                         d.target.name.toLowerCase().includes(term)) ? 1 : 0.2);
+            };
+
+            window.exportAsSVG = function() {
+                exportSvg(svg);
+            };
+
+            window.exportAsPNG = function() {
+                exportPng(svg);
+            };
+
+            document.addEventListener('keydown', handleKeydown);
+
+            function initGraph(projectsData) {
+                console.log('Initializing graph with data:', projectsData);
+                
+                // Combine all components and edges
+                const allComponents = projectsData.flatMap(project => 
+                    project.graph.components.map(component => ({
+                        ...component,
+                        project_context: project.name
+                    }))
+                );
+                const allEdges = projectsData.flatMap(project => 
+                    project.graph.edges.map(edge => ({
+                        ...edge,
+                        project_context: project.name
+                    }))
+                );
+
+                // Initialize global node map with string IDs
+                globalNodeMap.clear();
+                allComponents.forEach(node => {
+                    node.id = String(node.id);
+                    globalNodeMap.set(node.id, node);
+                });
+
+                const incomingEdgeCounts = calculateIncomingEdgeCounts(allEdges);
+                const tooltip = createTooltip();
+
+                addArrowheadMarker(svg);
+                simulation = createSimulation(width, height, allComponents, allEdges);
+                renderGraph(allComponents, allEdges, { svg, g, simulation, tooltip, incomingEdgeCounts, projectColors, globalNodeMap });
             }
 
-            window.exportAsSVG = function () {
-                exportSvg(svg)
+            function createSimulation(width, height, nodes, edges) {
+                console.log('Creating simulation with nodes:', nodes);
+                console.log('Creating simulation with edges:', edges);
+                
+                // Convert edges to use node objects instead of IDs
+                const links = edges.map(edge => {
+                    const source = globalNodeMap.get(edge.from);
+                    const target = globalNodeMap.get(edge.to);
+                    console.log('Creating link:', { 
+                        from: edge.from, 
+                        to: edge.to, 
+                        source: source ? { id: source.id, name: source.name, project: source.project_context } : null,
+                        target: target ? { id: target.id, name: target.name, project: target.project_context } : null 
+                    });
+                    if (!source || !target) {
+                        console.error('Missing node:', { from: edge.from, to: edge.to, source, target });
+                        return null;
+                    }
+                    return {
+                        source,
+                        target,
+                        project_context: edge.project_context
+                    };
+                }).filter(link => link !== null);
+
+                const sim = d3.forceSimulation(nodes)
+                    .force('link', d3.forceLink(links)
+                        .id(d => d.id)
+                        .distance(100))
+                    .force('charge', d3.forceManyBody().strength(-300))
+                    .force('center', d3.forceCenter(width / 2, height / 2))
+                    .force('collision', d3.forceCollide().radius(50));
+                return sim;
             }
-            window.exportAsPNG = function () {
-                exportPng(svg)
-            }
 
-            document.addEventListener('keydown', handleKeydown)
+            function renderGraph(components, edges, context) {
+                const { simulation, g, tooltip, incomingEdgeCounts, projectColors, globalNodeMap } = context;
+                
+                // Convert edges to use node objects
+                const linksData = edges.map(edge => {
+                    const source = globalNodeMap.get(String(edge.from));
+                    const target = globalNodeMap.get(String(edge.to));
+                    console.log('Rendering link:', { 
+                        from: edge.from, 
+                        to: edge.to, 
+                        source: source ? { id: source.id, name: source.name, project: source.project_context } : null,
+                        target: target ? { id: target.id, name: target.name, project: target.project_context } : null,
+                        project_context: edge.project_context
+                    });
+                    if (!source || !target) {
+                        console.error('Missing node:', { from: edge.from, to: edge.to, source, target });
+                        return null;
+                    }
+                    return {
+                        source,
+                        target,
+                        project_context: edge.project_context
+                    };
+                }).filter(link => link !== null);
 
-            // --- Helper Functions ---
+                // Add links
+                const link = g.append('g')
+                    .selectAll('line')
+                    .data(linksData)
+                    .enter()
+                    .append('line')
+                    .attr('class', 'link')
+                    .attr('marker-end', 'url(#arrowhead)')
+                    .style('stroke', d => d.source.project_context === d.target.project_context ? '#999' : '#ff7f0e')
+                    .style('stroke-opacity', d => d.source.project_context === d.target.project_context ? 0.6 : 0.8)
+                    .style('stroke-width', d => d.source.project_context === d.target.project_context ? 1 : 2);
 
-            function calculateIncomingEdgeCounts (edges) {
-                const counts = {}
-                edges.forEach(edge => {
-                    const target = String(edge[1])
-                    counts[target] = (counts[target] || 0) + 1
+                // Add nodes
+                const node = g.append('g')
+                    .selectAll('g')
+                    .data(components)
+                    .enter()
+                    .append('g')
+                    .attr('class', 'node-group')
+                    .call(d3.drag()
+                        .on('start', dragstarted)
+                        .on('drag', dragged)
+                        .on('end', dragended));
+
+                node.append('circle')
+                    .attr('class', 'node')
+                    .attr('r', 10)
+                    .style('fill', d => projectColors.get(d.project_context));
+
+                node.append('text')
+                    .attr('dx', 12)
+                    .attr('dy', '.35em')
+                    .text(d => d.name);
+
+                // Add tooltips
+                node.on('mouseover', function(event, d) {
+                    tooltip.transition()
+                        .duration(200)
+                        .style('opacity', .9);
+                    tooltip.html(`
+                        <strong>${d.name}</strong><br/>
+                        Project: ${d.project_context}<br/>
+                        Path: ${d.path}<br/>
+                        Props: ${Object.keys(d.props).join(', ')}
+                    `)
+                        .style('left', (event.pageX + 10) + 'px')
+                        .style('top', (event.pageY - 28) + 'px');
                 })
-                return counts
+                .on('mouseout', function() {
+                    tooltip.transition()
+                        .duration(500)
+                        .style('opacity', 0);
+                });
+
+                function ticked() {
+                    link
+                        .attr('x1', d => d.source.x)
+                        .attr('y1', d => d.source.y)
+                        .attr('x2', d => d.target.x)
+                        .attr('y2', d => d.target.y);
+
+                    node
+                        .attr('transform', d => `translate(${d.x},${d.y})`);
+                }
+
+                simulation.nodes(components).on('tick', ticked);
+                simulation.force('link').links(linksData);
+                simulation.alpha(1).restart();
+            }
+
+            function calculateIncomingEdgeCounts(edges) {
+                const counts = {};
+                edges.forEach(edge => {
+                    counts[edge.to] = (counts[edge.to] || 0) + 1;
+                });
+                return counts;
             }
 
             function createSvg (width, height) {
@@ -256,111 +440,6 @@
                     .attr('fill', '#999')
             }
 
-            function createSimulation (width, height, nodes, edges) {
-                const links = edges.map(edge => ({ source: String(edge[0]), target: String(edge[1]) }))
-                const sim = d3.forceSimulation(nodes)
-                sim.force('link', d3.forceLink().id(d => d.id).distance(100).links(links))
-                sim.force('charge', d3.forceManyBody().strength(-300))
-                sim.force('center', d3.forceCenter(width / 2, height / 2))
-                sim.force('collision', d3.forceCollide().radius(50))
-                return sim
-            }
-
-            function renderGraph (data, context) {
-                const { simulation, g, tooltip, incomingEdgeCounts } = context
-                // Map node ids to objects for link resolution.
-                const nodeById = new Map(data.graph.nodes.map(n => [n.id, n]))
-                const linksData = data.graph.edges.map(edge => ({
-                    source: nodeById.get(String(edge[0])),
-                    target: nodeById.get(String(edge[1]))
-                }))
-
-                const link = g.append('g')
-                    .selectAll('line')
-                    .data(linksData)
-                    .enter()
-                    .append('line')
-                    .attr('class', 'link')
-                    .attr('marker-end', 'url(#arrowhead)')
-
-                // Append node groups with class "node-group"
-                const node = g.append('g')
-                    .selectAll('g')
-                    .data(data.graph.nodes)
-                    .enter()
-                    .append('g')
-                    .attr('class', 'node-group')
-                    .call(d3.drag()
-                        .on('start', dragstarted)
-                        .on('drag', dragged)
-                        .on('end', dragended))
-                    .on('mouseover', (event, d) => {
-                        tooltip.transition()
-                            .duration(200)
-                            .style('opacity', 0.9)
-                        tooltip.html(`Path: ${d.file_path}<br/>Props: ${formatProps(d.prop_usage)}`)
-                            .style('left', (event.pageX + 10) + 'px')
-                            .style('top', (event.pageY - 28) + 'px')
-                    })
-                    .on('mouseout', () => {
-                        tooltip.transition()
-                            .duration(500)
-                            .style('opacity', 0)
-                    })
-
-                node.append('circle')
-                    .attr('class', 'node')
-                    .attr('r', d => getNodeRadius(d, incomingEdgeCounts))
-                    .attr('fill', d => getNodeColor(d, incomingEdgeCounts))
-
-                node.append('text')
-                    .attr('dx', 12)
-                    .attr('dy', '.35em')
-                    .text(d => d.name)
-
-                function ticked () {
-                    link
-                        .attr('x1', d => d.source.x)
-                        .attr('y1', d => d.source.y)
-                        .attr('x2', d => {
-                            const delta = computeDelta(d)
-                            const targetRadius = getNodeRadius(d.target, incomingEdgeCounts)
-                            return d.target.x - (delta.dx * (targetRadius + 5)) / delta.length
-                        })
-                        .attr('y2', d => {
-                            const delta = computeDelta(d)
-                            const targetRadius = getNodeRadius(d.target, incomingEdgeCounts)
-                            return d.target.y - (delta.dy * (targetRadius + 5)) / delta.length
-                        })
-                    node.attr('transform', d => `translate(${d.x},${d.y})`)
-                }
-
-                simulation.nodes(data.graph.nodes).on('tick', ticked)
-                simulation.force('link').links(linksData)
-                simulation.alpha(1).restart()
-            }
-
-            function computeDelta (d) {
-                const dx = d.target.x - d.source.x
-                const dy = d.target.y - d.source.y
-                const length = Math.sqrt(dx * dx + dy * dy) || 1
-                return { dx, dy, length }
-            }
-
-            function getNodeRadius (node, counts) {
-                const baseRadius = 5
-                const count = counts[node.id] || 0
-                return baseRadius + (count * 2)
-            }
-
-            function getNodeColor (node, counts) {
-                const count = counts[node.id] || 0
-                if (count === 0) return '#69b3a2'
-                if (count < 3) return '#3498db'
-                if (count < 5) return '#e67e22'
-                return '#e74c3c'
-            }
-
             function dragstarted (event, d) {
                 if (!event.active) simulation.alphaTarget(0.3).restart()
                 d.fx = d.x
@@ -378,66 +457,6 @@
                 return Object.entries(props)
                     .map(([prop, count]) => `${prop}(${count})`)
                     .join(', ')
-            }
-
-            // Updates the search results container with matching node info.
-            function updateSearchResults (term, currentProjectData) {
-                const container = getOrCreateSearchResultsContainer()
-                container.innerHTML = ''
-                if (term !== '') {
-                    const matchingNodes = currentProjectData.graph.nodes.filter(n => n.name.toLowerCase().includes(term))
-                    if (matchingNodes.length > 0) {
-                        const list = document.createElement('ul')
-                        matchingNodes.forEach(n => {
-                            const li = document.createElement('li')
-                            li.innerHTML = `<strong>${n.name}</strong> - ${n.file_path} - Props: ${formatProps(n.prop_usage)}`
-                            li.style.cursor = 'pointer'
-                            li.addEventListener('click', () => zoomToNode(n))
-                            list.appendChild(li)
-                        })
-                        container.appendChild(list)
-                    } else {
-                        container.innerHTML = '<em>No matching nodes found</em>'
-                    }
-                    container.style.display = 'block'
-                } else {
-                    container.style.display = 'none'
-                }
-            }
-
-            // Gets or creates the search results container underneath the search input.
-            function getOrCreateSearchResultsContainer () {
-                let container = document.getElementById('search-results')
-                if (!container) {
-                    container = document.createElement('div')
-                    container.id = 'search-results'
-                    // Basic styling – adjust as needed
-                    container.style.marginTop = '10px'
-                    container.style.maxHeight = '200px'
-                    container.style.overflowY = 'auto'
-                    container.style.backgroundColor = '#fff'
-                    container.style.border = '1px solid #ccc'
-                    container.style.padding = '10px'
-                    container.style.borderRadius = '4px'
-                    // Append to the search container
-                    const searchContainer = document.querySelector('.search-container')
-                    if (searchContainer) {
-                        searchContainer.appendChild(container)
-                    } else {
-                        document.body.appendChild(container)
-                    }
-                }
-                return container
-            }
-
-            // Zooms into the given node by centering it and applying a scale.
-            function zoomToNode (node) {
-                const scale = 2 // adjust as needed
-                const transform = d3.zoomIdentity
-                    .translate(width / 2, height / 2)
-                    .scale(scale)
-                    .translate(-node.x, -node.y)
-                svg.transition().duration(750).call(zoom.transform, transform)
             }
 
             function handleKeydown (e) {

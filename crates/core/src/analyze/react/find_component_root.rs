@@ -81,12 +81,12 @@ fn recursive_find(
     let resolved_path = resolver.resolve(file_path, specifier);
 
     if let Err(e) = resolved_path {
-        Logger::info(&format!("Could not resolve path. Falling back to import path: {:?}", e));
-
-        return Some((
-            component_name.to_string(),
-            specifier.to_string().into(),
+        Logger::info(&format!(
+            "Could not resolve path. Falling back to import path: {:?}",
+            e
         ));
+
+        return Some((component_name.to_string(), specifier.to_string().into()));
     }
 
     let resolved_path = resolved_path.unwrap();

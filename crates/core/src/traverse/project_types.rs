@@ -19,22 +19,22 @@ use spinne_logger::Logger;
 pub trait Project: Any {
     /// Gets the root path of the project
     fn get_root(&self) -> &PathBuf;
-    
+
     /// Gets the name of the project
     fn get_name(&self) -> &str;
-    
+
     /// Gets the component graph of the project
     fn get_component_graph(&self) -> &ComponentRegistry;
-    
+
     /// Gets mutable access to the component graph
     fn get_component_graph_mut(&mut self) -> &mut ComponentRegistry;
-    
+
     /// Gets all dependencies of the project
     fn get_dependencies(&self) -> Option<HashSet<String>>;
-    
+
     /// Finds a specific dependency by name
     fn find_dependency(&self, name: &str) -> Option<String>;
-    
+
     /// Traverses the project to analyze its components
     fn traverse(&mut self, exclude: &Vec<String>, include: &Vec<String>);
 
@@ -151,7 +151,7 @@ impl SourceProject {
             &self.resolver,
             &self.package_resolver,
         );
-        
+
         // Extract components using the analyzer
         let components = react_analyzer.analyze();
 
@@ -186,11 +186,17 @@ impl SourceProject {
 
             // Add everything to the graph in one operation
             unsafe {
-                (*self.component_registry).add_component(base_component.clone(), self.project_name.clone());
+                (*self.component_registry)
+                    .add_component(base_component.clone(), self.project_name.clone());
 
                 for child in child_components {
-                    (*self.component_registry).add_component(child.clone(), self.project_name.clone());
-                    (*self.component_registry).add_dependency(base_component.id.clone(), child.id.clone(), Some(self.project_name.clone()));
+                    (*self.component_registry)
+                        .add_component(child.clone(), self.project_name.clone());
+                    (*self.component_registry).add_dependency(
+                        base_component.id.clone(),
+                        child.id.clone(),
+                        Some(self.project_name.clone()),
+                    );
                 }
             }
         }
@@ -239,7 +245,8 @@ impl Project for SourceProject {
             // Handle entry points from config
             if let Some(config_entry_points) = &config.entry_points {
                 Logger::info("Analyzing entry points from config file");
-                let entry_points = config_entry_points.iter()
+                let entry_points = config_entry_points
+                    .iter()
                     .map(|path| self.project_root.join(path))
                     .collect::<Vec<_>>();
             }
@@ -391,16 +398,16 @@ impl ConsumerProject {
             &self.resolver,
             &self.package_resolver,
         );
-        
+
         // Extract components using the analyzer
         let components = react_analyzer.analyze();
-        
+
         for component in components {
             println!("component: {}", component.name);
             // Check if this component is from a source project
             let mut is_from_source = false;
             let mut source_project_name = None;
-            
+
             // Check if the component's file path matches any source project
             for source_project in &self.source_projects {
                 if path.starts_with(&source_project.project_root) {
@@ -417,7 +424,8 @@ impl ConsumerProject {
                 if let Some(source_project_name) = source_project_name {
                     // Find the component in the source project
                     if let Some(source_component) = unsafe {
-                        (*self.component_registry).find_component(&component.name, &source_project_name)
+                        (*self.component_registry)
+                            .find_component(&component.name, &source_project_name)
                     } {
                         // Create child components
                         let child_components: Vec<ComponentNode> = component
@@ -439,16 +447,22 @@ impl ConsumerProject {
                         // Add dependencies for each child component
                         for child in child_components {
                             if let Some(child_component) = unsafe {
-                                (*self.component_registry).find_component(&child.name, &source_project_name)
+                                (*self.component_registry)
+                                    .find_component(&child.name, &source_project_name)
                             } {
                                 unsafe {
-                                    (*self.component_registry).add_dependency(
-                                        source_component.node.id,
-                                        child_component.node.id,
-                                        Some(source_project_name.clone()),
-                                    ).unwrap_or_else(|e| {
-                                        Logger::error(&format!("Failed to add dependency: {}", e));
-                                    });
+                                    (*self.component_registry)
+                                        .add_dependency(
+                                            source_component.node.id,
+                                            child_component.node.id,
+                                            Some(source_project_name.clone()),
+                                        )
+                                        .unwrap_or_else(|e| {
+                                            Logger::error(&format!(
+                                                "Failed to add dependency: {}",
+                                                e
+                                            ));
+                                        });
                                 }
                             }
                         }
@@ -488,20 +502,22 @@ impl ConsumerProject {
 
                 // Add everything to the graph in one operation
                 unsafe {
-                    (*self.component_registry).add_component(base_component.clone(), self.project_name.clone());
+                    (*self.component_registry)
+                        .add_component(base_component.clone(), self.project_name.clone());
 
                     for child in child_components {
                         println!("child: {}", child.name);
                         // Check if the child component is from a source project
                         let mut child_is_from_source = false;
                         let mut child_source_project_name = None;
-                        
+
                         for source_project in &self.source_projects {
                             // Extract project name from the file path
                             if let Some(path_str) = child.file_path.to_str() {
                                 if path_str.starts_with(&source_project.project_name) {
                                     child_is_from_source = true;
-                                    child_source_project_name = Some(source_project.project_name.clone());
+                                    child_source_project_name =
+                                        Some(source_project.project_name.clone());
                                     break;
                                 }
                             }
@@ -511,16 +527,22 @@ impl ConsumerProject {
                             // Find the component in the source project
                             if let Some(child_source_project_name) = child_source_project_name {
                                 if let Some(source_component) = unsafe {
-                                    (*self.component_registry).find_component(&child.name, &child_source_project_name)
+                                    (*self.component_registry)
+                                        .find_component(&child.name, &child_source_project_name)
                                 } {
                                     unsafe {
-                                        (*self.component_registry).add_dependency(
-                                            base_component.id.clone(),
-                                            source_component.node.id,
-                                            Some(child_source_project_name),
-                                        ).unwrap_or_else(|e| {
-                                            Logger::error(&format!("Failed to add dependency: {}", e));
-                                        });
+                                        (*self.component_registry)
+                                            .add_dependency(
+                                                base_component.id.clone(),
+                                                source_component.node.id,
+                                                Some(child_source_project_name),
+                                            )
+                                            .unwrap_or_else(|e| {
+                                                Logger::error(&format!(
+                                                    "Failed to add dependency: {}",
+                                                    e
+                                                ));
+                                            });
                                     }
                                 } else {
                                     Logger::error(&format!(
@@ -531,14 +553,17 @@ impl ConsumerProject {
                             }
                         } else {
                             // Register the child component and add dependency
-                            (*self.component_registry).add_component(child.clone(), self.project_name.clone());
-                            (*self.component_registry).add_dependency(
-                                base_component.id.clone(),
-                                child.id.clone(),
-                                Some(self.project_name.clone()),
-                            ).unwrap_or_else(|e| {
-                                Logger::error(&format!("Failed to add dependency: {}", e));
-                            });
+                            (*self.component_registry)
+                                .add_component(child.clone(), self.project_name.clone());
+                            (*self.component_registry)
+                                .add_dependency(
+                                    base_component.id.clone(),
+                                    child.id.clone(),
+                                    Some(self.project_name.clone()),
+                                )
+                                .unwrap_or_else(|e| {
+                                    Logger::error(&format!("Failed to add dependency: {}", e));
+                                });
                         }
                     }
                 }
@@ -589,7 +614,8 @@ impl Project for ConsumerProject {
             // Handle entry points from config
             if let Some(config_entry_points) = &config.entry_points {
                 Logger::info("Analyzing entry points from config file");
-                let entry_points = config_entry_points.iter()
+                let entry_points = config_entry_points
+                    .iter()
                     .map(|path| self.project_root.join(path))
                     .collect::<Vec<_>>();
             }
@@ -620,4 +646,4 @@ impl Project for ConsumerProject {
     fn as_any(&self) -> &dyn Any {
         self
     }
-} 
+}

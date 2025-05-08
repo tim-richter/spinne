@@ -1,9 +1,9 @@
+use serde_json::Value;
 use std::{
     collections::{HashMap, HashSet},
     hash::{DefaultHasher, Hash, Hasher},
     path::PathBuf,
 };
-use serde_json::Value;
 
 /// Represents a component with its project context
 #[derive(Debug, Clone)]
@@ -19,11 +19,7 @@ pub struct ComponentNode {
 }
 
 impl ComponentNode {
-    pub fn new(
-        name: String,
-        file_path: PathBuf,
-        props: HashMap<String, usize>,
-    ) -> Self {
+    pub fn new(name: String, file_path: PathBuf, props: HashMap<String, usize>) -> Self {
         let id = Self::compute_hash(&name, &file_path);
         Self {
             id,
@@ -115,7 +111,7 @@ impl ComponentRegistry {
         let id = component.id;
         let name = component.name.clone();
         let file_path = component.file_path.clone();
-        
+
         let info = ComponentInfo {
             node: component,
             project: project.clone(),
@@ -127,7 +123,9 @@ impl ComponentRegistry {
         // Add to indices
         self.indices.by_name.insert((name, project.clone()), id);
         self.indices.by_path.insert(file_path, id);
-        let project_components = self.indices.by_project
+        let project_components = self
+            .indices
+            .by_project
             .entry(project)
             .or_insert_with(HashSet::new);
         project_components.insert(id);
@@ -137,7 +135,12 @@ impl ComponentRegistry {
     }
 
     /// Adds a dependency between components
-    pub fn add_dependency(&mut self, from: u64, to: u64, project_context: Option<String>) -> Result<(), String> {
+    pub fn add_dependency(
+        &mut self,
+        from: u64,
+        to: u64,
+        project_context: Option<String>,
+    ) -> Result<(), String> {
         // Validate both components exist
         if !self.components.contains_key(&from) {
             return Err(format!("Source component {} not found", from));
@@ -147,19 +150,21 @@ impl ComponentRegistry {
         }
 
         let edge = ComponentEdge { project_context };
-        
+
         // Add forward dependency
-        let from_deps = self.dependencies
+        let from_deps = self
+            .dependencies
             .entry(from)
             .or_insert_with(DependencyInfo::default);
         from_deps.dependencies.insert(to, edge);
 
         // Add reverse dependency
-        let to_deps = self.dependencies
+        let to_deps = self
+            .dependencies
             .entry(to)
             .or_insert_with(DependencyInfo::default);
         to_deps.dependents.insert(from);
-        
+
         Ok(())
     }
 
@@ -170,21 +175,24 @@ impl ComponentRegistry {
 
     /// Finds a component by name and project
     pub fn find_component(&self, name: &str, project: &str) -> Option<&ComponentInfo> {
-        self.indices.by_name
+        self.indices
+            .by_name
             .get(&(name.to_string(), project.to_string()))
             .and_then(|&id| self.components.get(&id))
     }
 
     /// Finds a component by import path
     pub fn find_by_import(&self, path: &PathBuf) -> Option<&ComponentInfo> {
-        self.indices.by_path
+        self.indices
+            .by_path
             .get(path)
             .and_then(|&id| self.components.get(&id))
     }
 
     /// Gets all components in a project
     pub fn get_project_components(&self, project: &str) -> Vec<&ComponentInfo> {
-        self.indices.by_project
+        self.indices
+            .by_project
             .get(project)
             .map(|ids| {
                 ids.iter()
@@ -239,7 +247,7 @@ impl ComponentRegistry {
         if let Some(component) = self.components.get(&component_id) {
             let deps = self.get_dependencies(component_id);
             let dep_ids: Vec<u64> = deps.iter().map(|(id, _)| *id).collect();
-            
+
             result.push(TraversalNode {
                 component_id,
                 component_name: component.node.name.clone(),
@@ -259,12 +267,14 @@ impl ComponentRegistry {
     pub fn remove_component(&mut self, component_id: u64) {
         if let Some(component) = self.components.remove(&component_id) {
             // Remove from indices
-            self.indices.by_name.remove(&(component.node.name, component.project.clone()));
+            self.indices
+                .by_name
+                .remove(&(component.node.name, component.project.clone()));
             self.indices.by_path.remove(&component.node.file_path);
             if let Some(project_components) = self.indices.by_project.get_mut(&component.project) {
                 project_components.remove(&component_id);
             }
-            
+
             // Remove from dependencies
             if let Some(deps) = self.dependencies.remove(&component_id) {
                 // Remove this component from other components' dependents
@@ -273,7 +283,7 @@ impl ComponentRegistry {
                         dep_info.dependents.remove(&component_id);
                     }
                 }
-                
+
                 // Remove this component from other components' dependencies
                 for dep_id in deps.dependents {
                     if let Some(dep_info) = self.dependencies.get_mut(&dep_id) {
@@ -288,7 +298,7 @@ impl ComponentRegistry {
     pub fn to_serializable(&self) -> Value {
         // Group components by project
         let mut projects = HashMap::new();
-        
+
         for (id, info) in &self.components {
             let project = info.project.clone();
             let entry = projects.entry(project).or_insert_with(|| {
@@ -305,7 +315,10 @@ impl ComponentRegistry {
                 "path": info.node.file_path,
                 "props": info.node.props
             });
-            entry["components"].as_array_mut().unwrap().push(component_json);
+            entry["components"]
+                .as_array_mut()
+                .unwrap()
+                .push(component_json);
 
             // Add edges
             if let Some(deps) = self.dependencies.get(id) {
@@ -346,9 +359,11 @@ mod tests {
             HashMap::new(),
         );
         registry.add_component(component.clone(), "test-project".to_string());
-        
+
         assert_eq!(registry.get_project_components("test-project").len(), 1);
-        assert!(registry.find_component("TestComponent", "test-project").is_some());
+        assert!(registry
+            .find_component("TestComponent", "test-project")
+            .is_some());
     }
 
     #[test]
@@ -364,14 +379,14 @@ mod tests {
             PathBuf::from("src/Component2.tsx"),
             HashMap::new(),
         );
-        
+
         registry.add_component(component1.clone(), "test-project".to_string());
         registry.add_component(component2.clone(), "test-project".to_string());
-        
+
         assert!(registry
             .add_dependency(component1.id, component2.id, None)
             .is_ok());
-            
+
         assert_eq!(registry.get_dependencies(component1.id).len(), 1);
         assert_eq!(registry.get_dependents(component2.id).len(), 1);
     }
@@ -389,14 +404,14 @@ mod tests {
             PathBuf::from("src/Component2.tsx"),
             HashMap::new(),
         );
-        
+
         registry.add_component(component1.clone(), "project1".to_string());
         registry.add_component(component2.clone(), "project2".to_string());
-        
+
         assert!(registry
             .add_dependency(component1.id, component2.id, Some("project2".to_string()))
             .is_ok());
-            
+
         let deps = registry.get_dependencies(component1.id);
         assert_eq!(deps.len(), 1);
         assert_eq!(deps[0].1.project_context, Some("project2".to_string()));
@@ -420,14 +435,18 @@ mod tests {
             PathBuf::from("src/Component3.tsx"),
             HashMap::new(),
         );
-        
+
         registry.add_component(component1.clone(), "test-project".to_string());
         registry.add_component(component2.clone(), "test-project".to_string());
         registry.add_component(component3.clone(), "test-project".to_string());
-        
-        registry.add_dependency(component1.id, component2.id, None).unwrap();
-        registry.add_dependency(component2.id, component3.id, None).unwrap();
-        
+
+        registry
+            .add_dependency(component1.id, component2.id, None)
+            .unwrap();
+        registry
+            .add_dependency(component2.id, component3.id, None)
+            .unwrap();
+
         let traversal = registry.traverse_from(component1.id);
         assert_eq!(traversal.len(), 3);
         assert_eq!(traversal[0].depth, 0);
@@ -448,14 +467,16 @@ mod tests {
             PathBuf::from("src/Component2.tsx"),
             HashMap::new(),
         );
-        
+
         registry.add_component(component1.clone(), "test-project".to_string());
         registry.add_component(component2.clone(), "test-project".to_string());
-        registry.add_dependency(component1.id, component2.id, None).unwrap();
-        
+        registry
+            .add_dependency(component1.id, component2.id, None)
+            .unwrap();
+
         registry.remove_component(component1.id);
         assert_eq!(registry.get_project_components("test-project").len(), 1);
         assert!(registry.get_dependencies(component1.id).is_empty());
         assert!(registry.get_dependents(component2.id).is_empty());
     }
-} 
+}

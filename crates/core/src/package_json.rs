@@ -266,11 +266,14 @@ mod tests {
             Some(HashSet::from(["react-dom".to_string()]))
         );
 
-        assert_eq!(package_json.get_all_dependencies(), Some(HashSet::from([
-            "react".to_string(),
-            "typescript".to_string(),
-            "react-dom".to_string(),
-        ])));
+        assert_eq!(
+            package_json.get_all_dependencies(),
+            Some(HashSet::from([
+                "react".to_string(),
+                "typescript".to_string(),
+                "react-dom".to_string(),
+            ]))
+        );
     }
 
     #[test]

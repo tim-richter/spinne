@@ -1,8 +1,8 @@
 use assert_cmd::Command;
 use predicates::prelude::*;
+use serde_json::Value;
 use std::fs;
 use tempfile::TempDir;
-use serde_json::Value;
 
 pub fn create_mock_project(files: &Vec<(&str, &str)>) -> TempDir {
     let temp_dir = TempDir::new().unwrap();
@@ -249,16 +249,10 @@ fn test_cli_with_json_output() {
     assert!(component_names.contains(&"Home"));
 
     // Verify the edge is from Home to Button
-    let button_id = components
-        .iter()
-        .find(|c| c["name"] == "Button")
-        .unwrap()["id"]
+    let button_id = components.iter().find(|c| c["name"] == "Button").unwrap()["id"]
         .as_u64()
         .unwrap();
-    let home_id = components
-        .iter()
-        .find(|c| c["name"] == "Home")
-        .unwrap()["id"]
+    let home_id = components.iter().find(|c| c["name"] == "Home").unwrap()["id"]
         .as_u64()
         .unwrap();
     assert_eq!(edge["from"].as_u64().unwrap(), home_id);

@@ -1,13 +1,10 @@
 use ignore::{DirEntry, WalkBuilder};
-use petgraph::{algo::toposort, Graph, graph::NodeIndex};
+use petgraph::{algo::toposort, graph::NodeIndex, Graph};
 use spinne_logger::Logger;
 use std::path::PathBuf;
 
-use super::project_types::{Project, SourceProject, ConsumerProject};
-use crate::{
-    graph::ComponentRegistry,
-    package_json::PackageJson,
-};
+use super::project_types::{ConsumerProject, Project, SourceProject};
+use crate::{graph::ComponentRegistry, package_json::PackageJson};
 
 /// Represents a workspace containing multiple projects.
 /// A workspace is a directory that contains multiple projects and holds a shared component registry
@@ -48,7 +45,7 @@ impl Workspace {
 
         // First pass: discover all projects
         let mut discovered_projects = Vec::new();
-        
+
         let walker = WalkBuilder::new(&self.workspace_root)
             .hidden(false) // We want to find .git folders
             .git_ignore(true)
@@ -62,11 +59,11 @@ impl Workspace {
         }
 
         Logger::info(&format!("Found {} projects", discovered_projects.len()));
-        
+
         // Second pass: classify projects as source or consumer
         self.classify_projects(discovered_projects);
     }
-    
+
     /// Discovers a single project and adds it to the list of discovered projects
     fn discover_project(&self, entry: &DirEntry, discovered_projects: &mut Vec<(PathBuf, String)>) {
         let path = entry.path();
@@ -86,37 +83,43 @@ impl Workspace {
                 // Read the project name from package.json
                 if let Some(package_json) = PackageJson::read(&package_json_path, false) {
                     if let Some(project_name) = package_json.name {
-                        Logger::info(&format!("Found project at: {} ({})", project_root.display(), project_name));
+                        Logger::info(&format!(
+                            "Found project at: {} ({})",
+                            project_root.display(),
+                            project_name
+                        ));
                         discovered_projects.push((project_root, project_name));
                     }
                 }
             }
         }
     }
-    
+
     /// Classifies discovered projects as source or consumer projects
     fn classify_projects(&mut self, discovered_projects: Vec<(PathBuf, String)>) {
         // First, create a map of project names to their indices for quick lookup
         let mut project_indices = std::collections::HashMap::new();
-        
+
         // Create a temporary graph to track dependencies
         let mut temp_graph = Graph::<usize, ()>::new();
-        
+
         // First pass: add all projects to the graph and create source projects
         for (i, (project_root, project_name)) in discovered_projects.iter().enumerate() {
             // Add node to the graph
             let node_idx = temp_graph.add_node(i);
             project_indices.insert(project_name.clone(), node_idx);
-            
+
             // Create a source project with a reference to the workspace's component registry
-            let source_project = SourceProject::new(project_root.clone(), &mut self.component_registry);
+            let source_project =
+                SourceProject::new(project_root.clone(), &mut self.component_registry);
             self.projects.push(Box::new(source_project));
         }
-        
+
         // Second pass: add edges based on dependencies and identify consumer projects
         for (i, (project_root, project_name)) in discovered_projects.iter().enumerate() {
             // Read dependencies from package.json
-            if let Some(package_json) = PackageJson::read(&project_root.join("package.json"), true) {
+            if let Some(package_json) = PackageJson::read(&project_root.join("package.json"), true)
+            {
                 if let Some(deps) = package_json.get_all_dependencies() {
                     // For each dependency, check if it matches any project name
                     for dep_name in deps {
@@ -129,43 +132,57 @@ impl Workspace {
                 }
             }
         }
-        
+
         // Third pass: identify consumer projects and update the graph
         let mut consumer_indices = Vec::new();
-        
+
         for (i, (project_root, project_name)) in discovered_projects.iter().enumerate() {
             // Check if this project has any outgoing edges (depends on other projects)
             let node_idx = NodeIndex::new(i);
-            if temp_graph.edges_directed(node_idx, petgraph::Direction::Outgoing).count() > 0 {
+            if temp_graph
+                .edges_directed(node_idx, petgraph::Direction::Outgoing)
+                .count()
+                > 0
+            {
                 // This is a consumer project
                 consumer_indices.push(i);
-                
+
                 // Replace the source project with a consumer project
-                let mut consumer_project = ConsumerProject::new(project_root.clone(), &mut self.component_registry);
-                
+                let mut consumer_project =
+                    ConsumerProject::new(project_root.clone(), &mut self.component_registry);
+
                 // Add source projects that this consumer depends on
-                if let Some(package_json) = PackageJson::read(&project_root.join("package.json"), true) {
+                if let Some(package_json) =
+                    PackageJson::read(&project_root.join("package.json"), true)
+                {
                     if let Some(deps) = package_json.get_all_dependencies() {
                         for dep_name in deps {
                             if let Some(&dep_idx) = project_indices.get(&dep_name) {
                                 let dep_i = temp_graph[dep_idx];
-                                if let Some(source_project) = self.projects.get(dep_i).and_then(|p| p.as_any().downcast_ref::<SourceProject>()) {
+                                if let Some(source_project) = self
+                                    .projects
+                                    .get(dep_i)
+                                    .and_then(|p| p.as_any().downcast_ref::<SourceProject>())
+                                {
                                     consumer_project.add_source_project(source_project.clone());
                                 }
                             }
                         }
                     }
                 }
-                
+
                 // Replace the source project with the consumer project
                 self.projects[i] = Box::new(consumer_project);
             }
         }
-        
+
         // Update the graph with the final project structure
         self.graph = temp_graph;
-        
-        Logger::info(&format!("Classified {} projects as consumers", consumer_indices.len()));
+
+        Logger::info(&format!(
+            "Classified {} projects as consumers",
+            consumer_indices.len()
+        ));
     }
 
     /// Traverses all discovered projects to analyze their components in dependency order
@@ -218,15 +235,14 @@ impl Workspace {
                 // For each dependency, check if it matches any project name
                 for dep_name in deps {
                     // Find the project index with this name
-                    if let Some(dep_idx) = self
-                        .projects
-                        .iter()
-                        .position(|p| p.get_name() == dep_name)
+                    if let Some(dep_idx) =
+                        self.projects.iter().position(|p| p.get_name() == dep_name)
                     {
                         Logger::debug(
                             &format!(
                                 "Found dependency: {} -> {}",
-                                dependent_project.get_name(), self.projects[dep_idx].get_name()
+                                dependent_project.get_name(),
+                                self.projects[dep_idx].get_name()
                             ),
                             2,
                         );
@@ -283,7 +299,6 @@ mod tests {
             // Project 1 - has no dependencies
             ("project1/.git/HEAD", "ref: refs/heads/main"),
             ("project1/package.json", r#"{"name": "project1"}"#),
-
             // Project 2 - depends on project1
             ("project2/.git/HEAD", "ref: refs/heads/main"),
             (
@@ -295,7 +310,6 @@ mod tests {
                 }
             }"#,
             ),
-
             // Project 3 - depends on project2
             ("project3/.git/HEAD", "ref: refs/heads/main"),
             (
@@ -346,7 +360,6 @@ mod tests {
                 "source-lib/src/components/index.ts",
                 r#"export * from './Button';"#,
             ),
-
             // Consumer project that uses the Button component
             ("consumer-app/.git/HEAD", "ref: refs/heads/main"),
             (
@@ -378,16 +391,23 @@ mod tests {
 
         // Verify project discovery and classification
         let projects = workspace.get_projects();
-        assert_eq!(projects.len(), 2, "Should find both source and consumer projects");
+        assert_eq!(
+            projects.len(),
+            2,
+            "Should find both source and consumer projects"
+        );
 
         // Find the consumer project
         let consumer_project = projects.iter().find(|p| p.get_name() == "consumer-app");
         assert!(consumer_project.is_some(), "Should find consumer project");
         let consumer_project = consumer_project.unwrap();
-        
+
         // Verify it's actually a ConsumerProject
         assert!(
-            consumer_project.as_any().downcast_ref::<ConsumerProject>().is_some(),
+            consumer_project
+                .as_any()
+                .downcast_ref::<ConsumerProject>()
+                .is_some(),
             "consumer-app should be a ConsumerProject"
         );
 
@@ -395,10 +415,13 @@ mod tests {
         let source_project = projects.iter().find(|p| p.get_name() == "source-lib");
         assert!(source_project.is_some(), "Should find source project");
         let source_project = source_project.unwrap();
-        
+
         // Verify it's actually a SourceProject
         assert!(
-            source_project.as_any().downcast_ref::<SourceProject>().is_some(),
+            source_project
+                .as_any()
+                .downcast_ref::<SourceProject>()
+                .is_some(),
             "source-lib should be a SourceProject"
         );
 
@@ -410,11 +433,17 @@ mod tests {
 
         // Verify Button component exists in source project
         let button_component = registry.find_component("Button", "source-lib");
-        assert!(button_component.is_some(), "Button component should exist in source project");
+        assert!(
+            button_component.is_some(),
+            "Button component should exist in source project"
+        );
 
         // Verify App component exists in consumer project
         let app_component = registry.find_component("App", "consumer-app");
-        assert!(app_component.is_some(), "App component should exist in consumer project");
+        assert!(
+            app_component.is_some(),
+            "App component should exist in consumer project"
+        );
 
         println!("{}", workspace.get_component_registry().to_serializable());
 

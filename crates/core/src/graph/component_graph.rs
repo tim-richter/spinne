@@ -1,10 +1,10 @@
+use serde_json::Value;
 use std::{
     collections::{HashMap, HashSet},
     hash::{DefaultHasher, Hash, Hasher},
     ops::Not,
     path::PathBuf,
 };
-use serde_json::Value;
 
 /// Represents a component with a unique identifier.
 #[derive(Debug, Clone)]

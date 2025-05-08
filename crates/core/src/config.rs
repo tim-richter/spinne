@@ -11,7 +11,7 @@ pub struct ConfigValues {
 }
 
 /// Represents the config file
-/// 
+///
 /// The config file is a JSON file that contains the configuration for the project.
 /// If the config file is not found, the default values will be used.
 pub struct Config {
@@ -49,7 +49,11 @@ impl Config {
                     None => None,
                 };
 
-                Some(ConfigValues { exclude, include, entry_points })
+                Some(ConfigValues {
+                    exclude,
+                    include,
+                    entry_points,
+                })
             }
             Err(err) => {
                 Logger::error("Failed to parse config file");
