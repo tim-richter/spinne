@@ -329,10 +329,10 @@
                     .enter()
                     .append('line')
                     .attr('class', 'link')
-                    .attr('marker-end', 'url(#arrowhead)')
                     .style('stroke', d => d.source.project_context === d.target.project_context ? '#999' : '#ff7f0e')
                     .style('stroke-opacity', d => d.source.project_context === d.target.project_context ? 0.6 : 0.8)
-                    .style('stroke-width', d => d.source.project_context === d.target.project_context ? 1 : 2);
+                    .style('stroke-width', d => d.source.project_context === d.target.project_context ? 1 : 2)
+                    .attr('marker-end', d => d.source.project_context === d.target.project_context ? 'url(#arrowhead-internal)' : 'url(#arrowhead-external)');
 
                 // Add nodes
                 const node = g.append('g')
@@ -348,7 +348,7 @@
 
                 node.append('circle')
                     .attr('class', 'node')
-                    .attr('r', 10)
+                    .attr('r', 8)
                     .style('fill', d => projectColors.get(d.project_context));
 
                 node.append('text')
@@ -426,18 +426,33 @@
             }
 
             function addArrowheadMarker (svg) {
+                // Internal dependency marker
                 svg.append('defs')
                     .append('marker')
-                    .attr('id', 'arrowhead')
+                    .attr('id', 'arrowhead-internal')
                     .attr('viewBox', '0 -5 10 10')
-                    .attr('refX', 5)
+                    .attr('refX', 18)
                     .attr('refY', 0)
-                    .attr('markerWidth', 8)
-                    .attr('markerHeight', 8)
+                    .attr('markerWidth', 10)
+                    .attr('markerHeight', 10)
                     .attr('orient', 'auto')
                     .append('path')
                     .attr('d', 'M0,-5L10,0L0,5')
-                    .attr('fill', '#999')
+                    .attr('fill', '#999');
+
+                // External dependency marker
+                svg.append('defs')
+                    .append('marker')
+                    .attr('id', 'arrowhead-external')
+                    .attr('viewBox', '0 -5 10 10')
+                    .attr('refX', 13.8)
+                    .attr('refY', 0)
+                    .attr('markerWidth', 10)
+                    .attr('markerHeight', 10)
+                    .attr('orient', 'auto')
+                    .append('path')
+                    .attr('d', 'M0,-5L10,0L0,5')
+                    .attr('fill', '#ff7f0e');
             }
 
             function dragstarted (event, d) {
