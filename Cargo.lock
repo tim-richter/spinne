@@ -1141,7 +1141,7 @@ dependencies = [
  "open",
  "predicates",
  "serde_json",
- "spinne-core",
+ "spinne-core 0.5.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "spinne-html 0.5.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "spinne-logger 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "tempfile",
@@ -1169,6 +1169,29 @@ dependencies = [
  "serde_json",
  "spinne-logger 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "tempfile",
+]
+
+[[package]]
+name = "spinne-core"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3b4f25851334cce80d7a417c0808d6a1eecfd973f4db9e89ce64dc3705fd47df"
+dependencies = [
+ "glob",
+ "ignore",
+ "itertools 0.14.0",
+ "jsonc-parser",
+ "oxc-miette",
+ "oxc_allocator",
+ "oxc_ast",
+ "oxc_parser",
+ "oxc_resolver",
+ "oxc_semantic",
+ "oxc_span",
+ "petgraph 0.7.1",
+ "serde",
+ "serde_json",
+ "spinne-logger 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
