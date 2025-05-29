@@ -1,6 +1,6 @@
 use clap::Parser;
 use spinne_logger::Logger;
-use std::{fs::File, path::PathBuf};
+use std::{fs::File, io::{BufWriter, Write}, path::PathBuf};
 
 use spinne_core::Workspace;
 use spinne_html::HtmlGenerator;
@@ -27,6 +27,8 @@ struct Args {
     /// - console: Prints the report directly to the console in a human-readable format
     ///
     /// - html: Generates an interactive HTML report (spinne-report.html)
+    ///
+    /// - json: Outputs raw JSON to stdout (useful for piping to other commands)
     #[arg(short, long, default_value = "file")]
     format: Format,
 
@@ -55,6 +57,8 @@ enum Format {
     Console,
     /// Generates an interactive HTML report
     Html,
+    /// Outputs raw JSON to stdout (useful for piping to other commands)
+    Json,
 }
 
 const FILE_NAME: &str = "spinne-report";
@@ -85,13 +89,25 @@ fn main() -> std::io::Result<()> {
         ));
 
         let file = File::create(output_path_with_extension)?;
-        serde_json::to_writer_pretty(file, &serializable_data)?;
+        let mut writer = BufWriter::new(file);
+        serde_json::to_writer_pretty(&mut writer, &serializable_data)?;
+        writer.flush()?;
     }
 
     // output to console
     if args.format == Format::Console {
         Logger::info("Printing report to console:");
         println!("{:#?}", serializable_data);
+    }
+
+    // output raw JSON to stdout
+    if args.format == Format::Json {
+        let stdout = std::io::stdout();
+        let mut writer = BufWriter::new(stdout.lock());
+        serde_json::to_writer(&mut writer, &serializable_data)?;
+        writer.flush()?;
+        // Ensure we exit cleanly after writing
+        std::process::exit(0);
     }
 
     // output to html file in current working directory
@@ -104,7 +120,7 @@ fn main() -> std::io::Result<()> {
             output_path_with_extension
         ));
 
-        match HtmlGenerator::new(serde_json::to_value(serializable_data).unwrap())
+        match HtmlGenerator::new(serializable_data.clone())
             .save(&output_path_with_extension)
         {
             Ok(_) => Logger::info(&format!(

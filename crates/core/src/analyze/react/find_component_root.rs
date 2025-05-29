@@ -72,6 +72,9 @@ pub fn find_component_root(
     None
 }
 
+/// Recursively finds the component root by following the import declarations and looking for the component name in the export statements.
+/// Returns the component name and the path to the file where the component is defined.
+/// If the component is not found, it returns the specifier as the component name and the path to the file where the component is defined.
 fn recursive_find(
     resolver: &ProjectResolver,
     file_path: &PathBuf,
@@ -91,6 +94,7 @@ fn recursive_find(
 
     let resolved_path = resolved_path.unwrap();
 
+    // if the resolved path is a node_modules path, then we need to reduce the path to the node_modules name
     if resolved_path
         .path()
         .to_str()
