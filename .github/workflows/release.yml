@@ -2,8 +2,9 @@ name: Release
 
 on:
   push:
-    branches:
-      - main
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
 
 env:
   CARGO_TERM_COLOR: always
@@ -13,9 +14,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
-      - uses: actions/setup-rust@v1
-        with:
-          rust-version: stable
       - name: Run tests
         run: cargo test --workspace
 
@@ -24,9 +22,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
-      - uses: actions/setup-rust@v1
-        with:
-          rust-version: stable
       - name: Install cargo-workspaces
         run: cargo install cargo-workspaces --locked
       - name: Publish crates
@@ -55,9 +50,6 @@ jobs:
             build-cmd: cargo build --release --package spinne
     steps:
       - uses: actions/checkout@v3
-      - uses: actions/setup-rust@v1
-        with:
-          rust-version: stable
       - name: Build binary
         run: ${{ matrix.build-cmd }}
       - name: Package binary
