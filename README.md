@@ -6,7 +6,7 @@
   Spinne
 </h1>
 <p align="center">
-Spins a web of component relationships for react projects
+Spins a web of component relationships for React projects
 </p>
 <p align="center">
   <a href="https://crates.io/crates/spinne"><img alt="Crates.io Version" src="https://img.shields.io/crates/v/spinne?style=for-the-badge&label=%20"></a>
@@ -18,7 +18,7 @@ Spins a web of component relationships for react projects
 
 ---
 
-Spinne is a CLI Tool, that analyzes react projects, and creates a component graph from all components that are used. This allows you to make some educated guesses about:
+Spinne is a CLI Tool, that analyzes React projects, and creates a component graph from all components that are used. This allows you to make some educated guesses about:
 - component usage
 - component relationships
 
