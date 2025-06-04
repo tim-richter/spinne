@@ -33,7 +33,7 @@ Spinne can analyze both single React projects and workspaces containing multiple
     "graph": {
       "components": [
         {
-          "id": 11611080489164640768,
+          "id": "dea225e218217fa98620aeb7242b3851655e96258942a1fe00ed793a2c92f82a",
           "name": "Button",
           "path": "source-lib/src/components/Button.tsx",
           "props": {
@@ -50,7 +50,7 @@ Spinne can analyze both single React projects and workspaces containing multiple
     "graph": {
       "components": [
         {
-          "id": 14300231078674835378,
+          "id": "fa6edff46e48143e680c8f708e071a97bbc34cdf985073be887ea0731c1232ea",
           "name": "App",
           "path": "consumer-app/src/App.tsx",
           "props": {}
@@ -58,8 +58,8 @@ Spinne can analyze both single React projects and workspaces containing multiple
       ],
       "edges": [
         {
-          "from": 14300231078674835378,
-          "to": 11611080489164640768,
+          "from": "fa6edff46e48143e680c8f708e071a97bbc34cdf985073be887ea0731c1232ea",
+          "to": "dea225e218217fa98620aeb7242b3851655e96258942a1fe00ed793a2c92f82a",
           "project_context": "source-lib"
         }
       ]
@@ -68,7 +68,7 @@ Spinne can analyze both single React projects and workspaces containing multiple
 ]
 ```
 
-For the graph, we use a directed graph where relationships between components are represented by edges. Each component has a unique ID and belongs to a project (indicated by the outer `name` field). Edges can be within the same project or across projects, with the `project_context` field indicating when a component depends on a component from another project.
+For the graph, we use a directed graph where relationships between components are represented by edges. Each component has a unique hash ID and belongs to a project (indicated by the outer `name` field). Edges can be within the same project or across projects, with the `project_context` field indicating when a component depends on a component from another project.
 
 In this example:
 - The `Button` component is defined in the `source-lib` project

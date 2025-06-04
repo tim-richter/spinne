@@ -64,7 +64,7 @@ mod tests {
             "graph": {
               "components": [
                 {
-                  "id": 14300231078674835378u64,
+                  "id": "14300231078674835378",
                   "name": "App",
                   "path": "consumer-app/src/App.tsx",
                   "props": {},
@@ -72,8 +72,8 @@ mod tests {
               ],
               "edges": [
                 {
-                  "from": 14300231078674835378u64,
-                  "to": 11611080489164640768u64,
+                  "from": "14300231078674835378",
+                  "to": "11611080489164640768",
                   "project_context": "source-lib",
                 },
               ],
@@ -84,7 +84,7 @@ mod tests {
             "graph": {
               "components": [
                 {
-                  "id": 11611080489164640768u64,
+                  "id": "11611080489164640768",
                   "name": "Button",
                   "path": "source-lib/src/components/Button.tsx",
                   "props": {},
@@ -109,7 +109,7 @@ mod tests {
           "graph": {
             "components": [
               {
-                "id": 11611080489164640768u64,
+                "id": "11611080489164640768",
                 "name": "Button",
                 "path": "source-lib/src/components/Button.tsx",
                 "props": {
@@ -120,7 +120,7 @@ mod tests {
                 }
               },
               {
-                "id": 11611080489164640769u64,
+                "id": "11611080489164640769",
                 "name": "Input",
                 "path": "source-lib/src/components/Input.tsx",
                 "props": {
@@ -131,7 +131,7 @@ mod tests {
                 }
               },
               {
-                "id": 11611080489164640770u64,
+                "id": "11611080489164640770",
                 "name": "Card",
                 "path": "source-lib/src/components/Card.tsx",
                 "props": {
@@ -141,7 +141,7 @@ mod tests {
                 }
               },
               {
-                "id": 11611080489164640771u64,
+                "id": "11611080489164640771",
                 "name": "Modal",
                 "path": "source-lib/src/components/Modal.tsx",
                 "props": {
@@ -154,23 +154,23 @@ mod tests {
             ],
             "edges": [
               {
-                "from": 11611080489164640771u64,
-                "to": 11611080489164640770u64,
+                "from": "11611080489164640771",
+                "to": "11611080489164640770",
                 "project_context": "source-lib"
               },
               {
-                "from": 11611080489164640771u64,
-                "to": 11611080489164640768u64,
+                "from": "11611080489164640771",
+                "to": "11611080489164640768",
                 "project_context": "source-lib"
               },
               {
-                "from": 11611080489164640770u64,
-                "to": 11611080489164640768u64,
+                "from": "11611080489164640770",
+                "to": "11611080489164640768",
                 "project_context": "source-lib"
               },
               {
-                "from": 11611080489164640770u64,
-                "to": 11611080489164640769u64,
+                "from": "11611080489164640770",
+                "to": "11611080489164640769",
                 "project_context": "source-lib"
               }
             ]
@@ -181,13 +181,13 @@ mod tests {
           "graph": {
             "components": [
               {
-                "id": 14300231078674835378u64,
+                "id": "14300231078674835378",
                 "name": "App",
                 "path": "consumer-app/src/App.tsx",
                 "props": {}
               },
               {
-                "id": 14300231078674835379u64,
+                "id": "14300231078674835379",
                 "name": "LoginForm",
                 "path": "consumer-app/src/components/LoginForm.tsx",
                 "props": {
@@ -196,7 +196,7 @@ mod tests {
                 }
               },
               {
-                "id": 14300231078674835380u64,
+                "id": "14300231078674835380",
                 "name": "UserProfile",
                 "path": "consumer-app/src/components/UserProfile.tsx",
                 "props": {
@@ -205,7 +205,7 @@ mod tests {
                 }
               },
               {
-                "id": 14300231078674835381u64,
+                "id": "14300231078674835381",
                 "name": "SettingsModal",
                 "path": "consumer-app/src/components/SettingsModal.tsx",
                 "props": {
@@ -217,43 +217,43 @@ mod tests {
             ],
             "edges": [
               {
-                "from": 14300231078674835378u64,
-                "to": 11611080489164640768u64,
+                "from": "14300231078674835378",
+                "to": "11611080489164640768",
                 "project_context": "source-lib"
               },
               {
-                "from": 14300231078674835378u64,
-                "to": 14300231078674835379u64,
+                "from": "14300231078674835378",
+                "to": "14300231078674835379",
                 "project_context": "consumer-app"
               },
               {
-                "from": 14300231078674835378u64,
-                "to": 14300231078674835380u64,
+                "from": "14300231078674835378",
+                "to": "14300231078674835380",
                 "project_context": "consumer-app"
               },
               {
-                "from": 14300231078674835379u64,
-                "to": 11611080489164640768u64,
+                "from": "14300231078674835379",
+                "to": "11611080489164640768",
                 "project_context": "source-lib"
               },
               {
-                "from": 14300231078674835379u64,
-                "to": 11611080489164640769u64,
+                "from": "14300231078674835379",
+                "to": "11611080489164640769",
                 "project_context": "source-lib"
               },
               {
-                "from": 14300231078674835380u64,
-                "to": 11611080489164640770u64,
+                "from": "14300231078674835380",
+                "to": "11611080489164640770",
                 "project_context": "source-lib"
               },
               {
-                "from": 14300231078674835380u64,
-                "to": 14300231078674835381u64,
+                "from": "14300231078674835380",
+                "to": "14300231078674835381",
                 "project_context": "consumer-app"
               },
               {
-                "from": 14300231078674835381u64,
-                "to": 11611080489164640771u64,
+                "from": "14300231078674835381",
+                "to": "11611080489164640771",
                 "project_context": "source-lib"
               }
             ]

@@ -23,6 +23,8 @@ itertools = "0.14.0"
 oxc_ast = "0.40"
 oxc-miette = "1"
 oxc_resolver = "3"
+sha2 = "0.10"
+hex = "0.4"
 
 [dev-dependencies]
 tempfile = { workspace = true }

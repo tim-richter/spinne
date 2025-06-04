@@ -449,7 +449,7 @@ mod tests {
 
         // Verify the connection between App and Button
         if let Some(app_info) = app_component {
-            let app_deps = registry.get_dependencies(app_info.node.id);
+            let app_deps = registry.get_dependencies(&app_info.node.id);
             assert_eq!(app_deps.len(), 1, "App should have one dependency");
 
             let button_dep = app_deps.first().unwrap();
