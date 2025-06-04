@@ -1,15 +1,15 @@
 use serde_json::Value;
 use std::{
     collections::{HashMap, HashSet},
-    hash::{DefaultHasher, Hash, Hasher},
     path::PathBuf,
 };
+use sha2::{Digest, Sha256};
 
 /// Represents a component with its project context
 #[derive(Debug, Clone)]
 pub struct ComponentNode {
     /// Unique identifier for the component
-    pub id: u64,
+    pub id: String,
     /// Name of the component
     pub name: String,
     /// Path to the component's file
@@ -30,11 +30,12 @@ impl ComponentNode {
     }
 
     /// Computes a hash from a component's name and path
-    fn compute_hash(name: &str, path: &PathBuf) -> u64 {
-        let mut hasher = DefaultHasher::new();
-        name.hash(&mut hasher);
-        path.hash(&mut hasher);
-        hasher.finish()
+    fn compute_hash(name: &str, path: &PathBuf) -> String {
+        let mut hasher = Sha256::new();
+        hasher.update(name.as_bytes());
+        hasher.update(path.to_string_lossy().as_bytes());
+        let result = hasher.finalize();
+        hex::encode(result)
     }
 }
 
@@ -58,30 +59,30 @@ pub struct ComponentInfo {
 #[derive(Debug, Clone, Default)]
 pub struct DependencyInfo {
     /// Components that depend on this component
-    pub dependents: HashSet<u64>,
+    pub dependents: HashSet<String>,
     /// Components this component depends on
-    pub dependencies: HashMap<u64, ComponentEdge>,
+    pub dependencies: HashMap<String, ComponentEdge>,
 }
 
 /// Indices for looking up components
 #[derive(Debug, Clone, Default)]
 pub struct ComponentIndices {
     /// Lookup by name and project
-    pub by_name: HashMap<(String, String), u64>,
+    pub by_name: HashMap<(String, String), String>,
     /// Lookup by import path
-    pub by_path: HashMap<PathBuf, u64>,
+    pub by_path: HashMap<PathBuf, String>,
     /// Lookup by project
-    pub by_project: HashMap<String, HashSet<u64>>,
+    pub by_project: HashMap<String, HashSet<String>>,
 }
 
 /// Represents a node in the traversal result
 #[derive(Debug)]
 pub struct TraversalNode {
-    pub component_id: u64,
+    pub component_id: String,
     pub component_name: String,
     pub file_path: PathBuf,
     pub project: String,
-    pub dependency_ids: Vec<u64>,
+    pub dependency_ids: Vec<String>,
     pub depth: usize,
 }
 
@@ -89,9 +90,9 @@ pub struct TraversalNode {
 #[derive(Debug, Clone)]
 pub struct ComponentRegistry {
     /// All components indexed by their ID
-    components: HashMap<u64, ComponentInfo>,
+    components: HashMap<String, ComponentInfo>,
     /// Dependencies between components (bidirectional)
-    dependencies: HashMap<u64, DependencyInfo>,
+    dependencies: HashMap<String, DependencyInfo>,
     /// Indices for looking up components
     indices: ComponentIndices,
 }
@@ -108,7 +109,7 @@ impl ComponentRegistry {
 
     /// Adds a component to the registry
     pub fn add_component(&mut self, component: ComponentNode, project: String) {
-        let id = component.id;
+        let id = component.id.clone();
         let name = component.name.clone();
         let file_path = component.file_path.clone();
 
@@ -118,17 +119,17 @@ impl ComponentRegistry {
         };
 
         // Add to main component store
-        self.components.insert(id, info);
+        self.components.insert(id.clone(), info);
 
         // Add to indices
-        self.indices.by_name.insert((name, project.clone()), id);
-        self.indices.by_path.insert(file_path, id);
+        self.indices.by_name.insert((name, project.clone()), id.clone());
+        self.indices.by_path.insert(file_path, id.clone());
         let project_components = self
             .indices
             .by_project
             .entry(project)
             .or_insert_with(HashSet::new);
-        project_components.insert(id);
+        project_components.insert(id.clone());
 
         // Initialize empty dependency info
         self.dependencies.insert(id, DependencyInfo::default());
@@ -137,15 +138,15 @@ impl ComponentRegistry {
     /// Adds a dependency between components
     pub fn add_dependency(
         &mut self,
-        from: u64,
-        to: u64,
+        from: &str,
+        to: &str,
         project_context: Option<String>,
     ) -> Result<(), String> {
         // Validate both components exist
-        if !self.components.contains_key(&from) {
+        if !self.components.contains_key(from) {
             return Err(format!("Source component {} not found", from));
         }
-        if !self.components.contains_key(&to) {
+        if !self.components.contains_key(to) {
             return Err(format!("Target component {} not found", to));
         }
 
@@ -154,23 +155,23 @@ impl ComponentRegistry {
         // Add forward dependency
         let from_deps = self
             .dependencies
-            .entry(from)
+            .entry(from.to_string())
             .or_insert_with(DependencyInfo::default);
-        from_deps.dependencies.insert(to, edge);
+        from_deps.dependencies.insert(to.to_string(), edge);
 
         // Add reverse dependency
         let to_deps = self
             .dependencies
-            .entry(to)
+            .entry(to.to_string())
             .or_insert_with(DependencyInfo::default);
-        to_deps.dependents.insert(from);
+        to_deps.dependents.insert(from.to_string());
 
         Ok(())
     }
 
     /// Gets a component by its ID
-    pub fn get_component(&self, id: u64) -> Option<&ComponentInfo> {
-        self.components.get(&id)
+    pub fn get_component(&self, id: &str) -> Option<&ComponentInfo> {
+        self.components.get(id)
     }
 
     /// Finds a component by name and project
@@ -178,7 +179,7 @@ impl ComponentRegistry {
         self.indices
             .by_name
             .get(&(name.to_string(), project.to_string()))
-            .and_then(|&id| self.components.get(&id))
+            .and_then(|id| self.components.get(id))
     }
 
     /// Finds a component by import path
@@ -186,7 +187,7 @@ impl ComponentRegistry {
         self.indices
             .by_path
             .get(path)
-            .and_then(|&id| self.components.get(&id))
+            .and_then(|id| self.components.get(id))
     }
 
     /// Gets all components in a project
@@ -196,60 +197,60 @@ impl ComponentRegistry {
             .get(project)
             .map(|ids| {
                 ids.iter()
-                    .filter_map(|&id| self.components.get(&id))
+                    .filter_map(|id| self.components.get(id))
                     .collect()
             })
             .unwrap_or_default()
     }
 
     /// Gets all dependencies for a component
-    pub fn get_dependencies(&self, component_id: u64) -> Vec<(u64, &ComponentEdge)> {
+    pub fn get_dependencies(&self, component_id: &str) -> Vec<(String, &ComponentEdge)> {
         self.dependencies
-            .get(&component_id)
+            .get(component_id)
             .map(|info| {
                 info.dependencies
                     .iter()
-                    .map(|(id, edge)| (*id, edge))
+                    .map(|(id, edge)| (id.clone(), edge))
                     .collect()
             })
             .unwrap_or_default()
     }
 
     /// Gets all components that depend on a given component
-    pub fn get_dependents(&self, component_id: u64) -> Vec<u64> {
+    pub fn get_dependents(&self, component_id: &str) -> Vec<String> {
         self.dependencies
-            .get(&component_id)
-            .map(|info| info.dependents.iter().copied().collect())
+            .get(component_id)
+            .map(|info| info.dependents.iter().cloned().collect())
             .unwrap_or_default()
     }
 
     /// Traverses the graph starting from a component
-    pub fn traverse_from(&self, start_id: u64) -> Vec<TraversalNode> {
+    pub fn traverse_from(&self, start_id: &str) -> Vec<TraversalNode> {
         let mut visited = HashSet::new();
         let mut result = Vec::new();
-        self.traverse_recursive(start_id, 0, &mut visited, &mut result);
+        self.traverse_recursive(start_id.to_string(), 0, &mut visited, &mut result);
         result
     }
 
     /// Recursive helper for graph traversal
     fn traverse_recursive(
         &self,
-        component_id: u64,
+        component_id: String,
         depth: usize,
-        visited: &mut HashSet<u64>,
+        visited: &mut HashSet<String>,
         result: &mut Vec<TraversalNode>,
     ) {
         if visited.contains(&component_id) {
             return;
         }
-        visited.insert(component_id);
+        visited.insert(component_id.clone());
 
         if let Some(component) = self.components.get(&component_id) {
-            let deps = self.get_dependencies(component_id);
-            let dep_ids: Vec<u64> = deps.iter().map(|(id, _)| *id).collect();
-
+            let deps = self.get_dependencies(&component_id);
+            let dep_ids: Vec<String> = deps.iter().map(|(id, _)| id.clone()).collect();
+            
             result.push(TraversalNode {
-                component_id,
+                component_id: component_id.clone(),
                 component_name: component.node.name.clone(),
                 file_path: component.node.file_path.clone(),
                 project: component.project.clone(),
@@ -264,30 +265,30 @@ impl ComponentRegistry {
     }
 
     /// Removes a component and all its dependencies
-    pub fn remove_component(&mut self, component_id: u64) {
-        if let Some(component) = self.components.remove(&component_id) {
+    pub fn remove_component(&mut self, component_id: &str) {
+        if let Some(component) = self.components.remove(component_id) {
             // Remove from indices
             self.indices
                 .by_name
                 .remove(&(component.node.name, component.project.clone()));
             self.indices.by_path.remove(&component.node.file_path);
             if let Some(project_components) = self.indices.by_project.get_mut(&component.project) {
-                project_components.remove(&component_id);
+                project_components.remove(component_id);
             }
 
             // Remove from dependencies
-            if let Some(deps) = self.dependencies.remove(&component_id) {
+            if let Some(deps) = self.dependencies.remove(component_id) {
                 // Remove this component from other components' dependents
                 for dep_id in deps.dependencies.keys() {
                     if let Some(dep_info) = self.dependencies.get_mut(dep_id) {
-                        dep_info.dependents.remove(&component_id);
+                        dep_info.dependents.remove(component_id);
                     }
                 }
 
                 // Remove this component from other components' dependencies
                 for dep_id in deps.dependents {
                     if let Some(dep_info) = self.dependencies.get_mut(&dep_id) {
-                        dep_info.dependencies.remove(&component_id);
+                        dep_info.dependencies.remove(component_id);
                     }
                 }
             }
@@ -384,11 +385,11 @@ mod tests {
         registry.add_component(component2.clone(), "test-project".to_string());
 
         assert!(registry
-            .add_dependency(component1.id, component2.id, None)
+            .add_dependency(&component1.id, &component2.id, None)
             .is_ok());
 
-        assert_eq!(registry.get_dependencies(component1.id).len(), 1);
-        assert_eq!(registry.get_dependents(component2.id).len(), 1);
+        assert_eq!(registry.get_dependencies(&component1.id).len(), 1);
+        assert_eq!(registry.get_dependents(&component2.id).len(), 1);
     }
 
     #[test]
@@ -409,10 +410,10 @@ mod tests {
         registry.add_component(component2.clone(), "project2".to_string());
 
         assert!(registry
-            .add_dependency(component1.id, component2.id, Some("project2".to_string()))
+            .add_dependency(&component1.id, &component2.id, Some("project2".to_string()))
             .is_ok());
 
-        let deps = registry.get_dependencies(component1.id);
+        let deps = registry.get_dependencies(&component1.id);
         assert_eq!(deps.len(), 1);
         assert_eq!(deps[0].1.project_context, Some("project2".to_string()));
     }
@@ -441,13 +442,13 @@ mod tests {
         registry.add_component(component3.clone(), "test-project".to_string());
 
         registry
-            .add_dependency(component1.id, component2.id, None)
+            .add_dependency(&component1.id, &component2.id, None)
             .unwrap();
         registry
-            .add_dependency(component2.id, component3.id, None)
+            .add_dependency(&component2.id, &component3.id, None)
             .unwrap();
 
-        let traversal = registry.traverse_from(component1.id);
+        let traversal = registry.traverse_from(&component1.id);
         assert_eq!(traversal.len(), 3);
         assert_eq!(traversal[0].depth, 0);
         assert_eq!(traversal[1].depth, 1);
@@ -471,12 +472,12 @@ mod tests {
         registry.add_component(component1.clone(), "test-project".to_string());
         registry.add_component(component2.clone(), "test-project".to_string());
         registry
-            .add_dependency(component1.id, component2.id, None)
+            .add_dependency(&component1.id, &component2.id, None)
             .unwrap();
 
-        registry.remove_component(component1.id);
+        registry.remove_component(&component1.id);
         assert_eq!(registry.get_project_components("test-project").len(), 1);
-        assert!(registry.get_dependencies(component1.id).is_empty());
-        assert!(registry.get_dependents(component2.id).is_empty());
+        assert!(registry.get_dependencies(&component1.id).is_empty());
+        assert!(registry.get_dependents(&component2.id).is_empty());
     }
 }

@@ -249,12 +249,16 @@ fn test_cli_with_json_output() {
     assert!(component_names.contains(&"Home"));
 
     // Verify the edge is from Home to Button
-    let button_id = components.iter().find(|c| c["name"] == "Button").unwrap()["id"]
-        .as_u64()
-        .unwrap();
-    let home_id = components.iter().find(|c| c["name"] == "Home").unwrap()["id"]
-        .as_u64()
-        .unwrap();
-    assert_eq!(edge["from"].as_u64().unwrap(), home_id);
-    assert_eq!(edge["to"].as_u64().unwrap(), button_id);
+    let button_id = components
+        .iter()
+        .find(|c| c["name"] == "Button")
+        .unwrap()["id"]
+        .clone();
+    let home_id = components
+        .iter()
+        .find(|c| c["name"] == "Home")
+        .unwrap()["id"]
+        .clone();
+    assert_eq!(edge["from"], home_id);
+    assert_eq!(edge["to"], button_id);
 }

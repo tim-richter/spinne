@@ -193,8 +193,8 @@ impl SourceProject {
                     (*self.component_registry)
                         .add_component(child.clone(), self.project_name.clone());
                     (*self.component_registry).add_dependency(
-                        base_component.id.clone(),
-                        child.id.clone(),
+                        &base_component.id,
+                        &child.id,
                         Some(self.project_name.clone()),
                     );
                 }
@@ -453,8 +453,8 @@ impl ConsumerProject {
                                 unsafe {
                                     (*self.component_registry)
                                         .add_dependency(
-                                            source_component.node.id,
-                                            child_component.node.id,
+                                            &source_component.node.id,
+                                            &child_component.node.id,
                                             Some(source_project_name.clone()),
                                         )
                                         .unwrap_or_else(|e| {
@@ -533,11 +533,11 @@ impl ConsumerProject {
                                     unsafe {
                                         (*self.component_registry)
                                             .add_dependency(
-                                                base_component.id.clone(),
-                                                source_component.node.id,
+                                                &base_component.id,
+                                                &source_component.node.id,
                                                 Some(child_source_project_name),
                                             )
-                                            .unwrap_or_else(|e| {
+                                                .unwrap_or_else(|e| {
                                                 Logger::error(&format!(
                                                     "Failed to add dependency: {}",
                                                     e
@@ -557,8 +557,8 @@ impl ConsumerProject {
                                 .add_component(child.clone(), self.project_name.clone());
                             (*self.component_registry)
                                 .add_dependency(
-                                    base_component.id.clone(),
-                                    child.id.clone(),
+                                    &base_component.id,
+                                    &child.id,
                                     Some(self.project_name.clone()),
                                 )
                                 .unwrap_or_else(|e| {
