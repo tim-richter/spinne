@@ -263,6 +263,9 @@ mod tests {
         let generator = HtmlGenerator::new(graph_data);
         let output_path = Path::new("test.html");
         generator.save(output_path).unwrap();
-        open::that(output_path).unwrap();
+
+        assert!(output_path.exists());
+        let file_content = fs::read_to_string(output_path).unwrap();
+        assert_eq!(file_content, generator.template);
     }
 }
