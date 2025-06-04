@@ -84,7 +84,8 @@ impl ComponentGraph {
     }
 
     /// Adds a directional edge from `from_id` to `to_id`.
-    /// Returns `false` if either component does not exist.
+    /// Returns `false` if either component does not exist or if the edge
+    /// already existed.
     pub fn add_edge(&mut self, from_id: u64, to_id: u64) -> bool {
         if !self.has_component(from_id) || !self.has_component(to_id) {
             return false;
