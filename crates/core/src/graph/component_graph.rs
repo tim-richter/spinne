@@ -2,7 +2,6 @@ use serde_json::Value;
 use std::{
     collections::{HashMap, HashSet},
     hash::{DefaultHasher, Hash, Hasher},
-    ops::Not,
     path::PathBuf,
 };
 
@@ -51,21 +50,6 @@ impl Component {
     }
 }
 
-impl Not for Component {
-    type Output = bool;
-
-    fn not(self) -> Self::Output {
-        false // or true, depending on your use case
-    }
-}
-
-impl Not for &Component {
-    type Output = bool;
-
-    fn not(self) -> Self::Output {
-        false // or true, depending on your use case
-    }
-}
 
 /// A simple graph where nodes are components identified by a unique value,
 /// and edges represent the relationship "uses."
@@ -220,7 +204,8 @@ mod tests {
         };
 
         // Adding a new component should succeed.
-        assert!(graph.add_component(comp1));
+        graph.add_component(comp1);
+        assert!(graph.has_component(1));
 
         // Attempting to add a duplicate component (same id) should update the component.
         let comp1_dup = Component {
@@ -231,7 +216,8 @@ mod tests {
             props: HashMap::new(),
             project: "Project A".to_string(),
         };
-        assert!(graph.add_component(comp1_dup));
+        graph.add_component(comp1_dup);
+        assert!(graph.has_component(1));
 
         // Check that the component is stored correctly.
         let retrieved = graph.get_component(1).unwrap();
@@ -259,11 +245,14 @@ mod tests {
         };
 
         // Add components first.
-        assert!(graph.add_component(comp1));
-        assert!(graph.add_component(comp2));
+        graph.add_component(comp1);
+        graph.add_component(comp2);
+        assert!(graph.has_component(100));
+        assert!(graph.has_component(200));
 
         // Add a valid edge.
-        assert!(graph.add_edge(100, 200));
+        graph.add_edge(100, 200);
+        assert!(graph.has_edge(100, 200));
 
         // Ensure that the neighbor is correctly registered.
         let neighbors = graph.get_neighbors(100).unwrap();
@@ -283,13 +272,16 @@ mod tests {
         };
 
         // Add only one component.
-        assert!(graph.add_component(comp1));
+        graph.add_component(comp1);
+        assert!(graph.has_component(50));
 
         // Trying to add an edge where the source node doesn't exist.
-        assert!(!graph.add_edge(999, 50));
+        graph.add_edge(999, 50);
+        assert!(!graph.has_edge(999, 50));
 
         // Trying to add an edge where the target node doesn't exist.
-        assert!(!graph.add_edge(50, 888));
+        graph.add_edge(50, 888);
+        assert!(!graph.has_edge(50, 888));
     }
 
     #[test]
