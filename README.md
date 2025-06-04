@@ -106,6 +106,12 @@ spinne -f html
 ```
 This will create 'spinne-report.html' and automatically open it in your default browser.
 
+If you need the raw JSON without any log output (for example to send it to a server) you can use `-f json` and pipe it directly to `curl` or `wget`:
+
+```bash
+spinne -f json | curl -X POST -H "Content-Type: application/json" -d @- https://example.com/api/store
+```
+
 To analyze specific entry points for exports:
 
 ```bash
@@ -118,7 +124,7 @@ This will analyze the specified files for exported components before performing 
 | Option | Description | Options | Default |
 | --- | --- | --- | --- |
 | `-e, --entry <path>` | Entry point directory | Path | current directory (./) |
-| `-f, --format <format>` | Output format | `file`, `console`, `html` | `file` |
+| `-f, --format <format>` | Output format | `file`, `console`, `html`, `json` | `file` |
 | `--exclude <patterns>` | Glob patterns to exclude | comma separated patterns | `**/node_modules/**,**/dist/**,**/build/**,**/*.stories.tsx,**/*.test.tsx` |
 | `--include <patterns>` | Glob patterns to include | comma separated patterns | `**/*.tsx` |
 | `--entry-points <paths>` | Files to analyze for exports | comma separated paths | none |
