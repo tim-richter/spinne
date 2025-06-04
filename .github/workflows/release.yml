@@ -28,7 +28,7 @@ jobs:
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
         run: |
-          cargo workspaces publish --from-git --no-tag --yes --token $CARGO_REGISTRY_TOKEN
+          cargo workspaces publish --from-git --no-git-tag --yes --token $CARGO_REGISTRY_TOKEN
 
   build:
     needs: publish
