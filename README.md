@@ -112,13 +112,6 @@ If you need the raw JSON without any log output (for example to send it to a ser
 spinne -f json | curl -X POST -H "Content-Type: application/json" -d @- https://example.com/api/store
 ```
 
-To analyze specific entry points for exports:
-
-```bash
-spinne --entry-points src/index.tsx,src/components/index.ts
-```
-This will analyze the specified files for exported components before performing the normal component graph analysis.
-
 ## Options
 
 | Option | Description | Options | Default |
@@ -127,7 +120,6 @@ This will analyze the specified files for exported components before performing 
 | `-f, --format <format>` | Output format | `file`, `console`, `html`, `json` | `file` |
 | `--exclude <patterns>` | Glob patterns to exclude | comma separated patterns | `**/node_modules/**,**/dist/**,**/build/**,**/*.stories.tsx,**/*.test.tsx` |
 | `--include <patterns>` | Glob patterns to include | comma separated patterns | `**/*.tsx` |
-| `--entry-points <paths>` | Files to analyze for exports | comma separated paths | none |
 | `-l` | Verbosity level | Use multiple times (-l, -ll, etc.) | 0 |
 
 ## Configuration File
