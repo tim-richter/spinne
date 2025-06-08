@@ -445,7 +445,6 @@ mod tests {
             "App component should exist in consumer project"
         );
 
-        println!("{}", workspace.get_component_registry().to_serializable());
 
         // Verify the connection between App and Button
         if let Some(app_info) = app_component {

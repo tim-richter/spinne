@@ -1,5 +1,7 @@
 use std::path::PathBuf;
 
+use spinne_logger::Logger;
+
 use itertools::Itertools;
 use miette::NamedSource;
 use oxc_allocator::Allocator;
@@ -28,7 +30,7 @@ pub fn parse_tsx<'a>(
             .into_iter()
             .map(|error| format!("{:?}", error.with_source_code(named_source.clone())))
             .join("\n");
-        println!("Parsing failed:\n\n{error_message}",);
+        Logger::error(&format!("Parsing failed:\n\n{error_message}"));
         return Err(error_message);
     }
 
@@ -40,7 +42,7 @@ pub fn parse_tsx<'a>(
             .into_iter()
             .map(|error| format!("{:?}", error.with_source_code(named_source.clone())))
             .join("\n");
-        println!("Parsing failed:\n\n{error_message}",);
+        Logger::error(&format!("Parsing failed:\n\n{error_message}"));
         return Err(error_message);
     }
 
