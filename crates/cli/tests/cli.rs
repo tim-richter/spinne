@@ -262,3 +262,36 @@ fn test_cli_with_json_output() {
     assert_eq!(edge["from"], home_id);
     assert_eq!(edge["to"], button_id);
 }
+
+#[test]
+fn test_cli_with_json_stdout() {
+    let temp_dir = create_mock_project(&vec![
+        (".git/HEAD", "ref: refs/heads/main"),
+        ("package.json", r#"{"name": "mock-project"}"#),
+        (
+            "src/components/Button.tsx",
+            "export const Button = () => { return <button>Click me</button>; }",
+        ),
+        (
+            "src/pages/Home.tsx",
+            "import { Button } from '../components/Button'; export const Home = () => { return <div><Button /><main>Welcome</main></div>; }",
+        ),
+    ]);
+    let mut cmd = Command::cargo_bin("spinne").unwrap();
+
+    let output = cmd
+        .current_dir(temp_dir.path())
+        .arg("-f")
+        .arg("json")
+        .output()
+        .unwrap();
+
+    assert!(output.status.success());
+
+    let stdout = String::from_utf8(output.stdout).unwrap();
+    let last_line = stdout.lines().last().unwrap_or("");
+    let json: Value = serde_json::from_str(last_line).unwrap();
+
+    assert!(json.is_array());
+    assert_eq!(json[0]["name"], "mock-project");
+}
