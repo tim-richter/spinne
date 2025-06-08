@@ -169,6 +169,15 @@ impl ComponentRegistry {
         Ok(())
     }
 
+    /// Adds a set of props to a component, incrementing existing counts
+    pub fn add_props(&mut self, component_id: &str, props: &HashMap<String, usize>) {
+        if let Some(info) = self.components.get_mut(component_id) {
+            for (prop, count) in props {
+                *info.node.props.entry(prop.clone()).or_insert(0) += *count;
+            }
+        }
+    }
+
     /// Gets a component by its ID
     pub fn get_component(&self, id: &str) -> Option<&ComponentInfo> {
         self.components.get(id)
@@ -479,5 +488,30 @@ mod tests {
         assert_eq!(registry.get_project_components("test-project").len(), 1);
         assert!(registry.get_dependencies(&component1.id).is_empty());
         assert!(registry.get_dependents(&component2.id).is_empty());
+    }
+
+    #[test]
+    fn test_add_props() {
+        let mut registry = ComponentRegistry::new();
+        let component = ComponentNode::new(
+            "Button".to_string(),
+            PathBuf::from("src/Button.tsx"),
+            HashMap::new(),
+        );
+
+        registry.add_component(component.clone(), "test-project".to_string());
+
+        let mut props1 = HashMap::new();
+        props1.insert("label".to_string(), 1);
+        registry.add_props(&component.id, &props1);
+
+        let mut props2 = HashMap::new();
+        props2.insert("label".to_string(), 2);
+        props2.insert("onClick".to_string(), 1);
+        registry.add_props(&component.id, &props2);
+
+        let stored = registry.get_component(&component.id).unwrap();
+        assert_eq!(stored.node.props.get("label"), Some(&3));
+        assert_eq!(stored.node.props.get("onClick"), Some(&1));
     }
 }

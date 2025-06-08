@@ -156,7 +156,7 @@ impl SourceProject {
         let components = react_analyzer.analyze();
 
         for component in components {
-            // Create base component
+            // Create base component with props
             let base_component = ComponentNode::new(
                 component.name.clone(),
                 replace_absolute_path_with_project_name(
@@ -164,7 +164,7 @@ impl SourceProject {
                     component.file_path.clone(),
                     self.project_name.clone(),
                 ),
-                HashMap::new(),
+                component.props.clone(),
             );
 
             // Create child components
@@ -179,19 +179,33 @@ impl SourceProject {
                             child.origin_file_path.clone(),
                             self.project_name.clone(),
                         ),
-                        HashMap::new(),
+                        child.props,
                     )
                 })
                 .collect();
 
             // Add everything to the graph in one operation
             unsafe {
-                (*self.component_registry)
-                    .add_component(base_component.clone(), self.project_name.clone());
+                if let Some(existing) = (*self.component_registry)
+                    .find_component(&base_component.name, &self.project_name)
+                {
+                    (*self.component_registry)
+                        .add_props(&existing.node.id, &base_component.props);
+                } else {
+                    (*self.component_registry)
+                        .add_component(base_component.clone(), self.project_name.clone());
+                }
 
                 for child in child_components {
-                    (*self.component_registry)
-                        .add_component(child.clone(), self.project_name.clone());
+                    if let Some(existing_child) = (*self.component_registry)
+                        .find_component(&child.name, &self.project_name)
+                    {
+                        (*self.component_registry)
+                            .add_props(&existing_child.node.id, &child.props);
+                    } else {
+                        (*self.component_registry)
+                            .add_component(child.clone(), self.project_name.clone());
+                    }
                     (*self.component_registry).add_dependency(
                         &base_component.id,
                         &child.id,
@@ -439,7 +453,7 @@ impl ConsumerProject {
                                         child.origin_file_path.clone(),
                                         self.project_name.clone(),
                                     ),
-                                    HashMap::new(),
+                                    child.props,
                                 )
                             })
                             .collect();
@@ -451,6 +465,8 @@ impl ConsumerProject {
                                     .find_component(&child.name, &source_project_name)
                             } {
                                 unsafe {
+                                    (*self.component_registry)
+                                        .add_props(&child_component.node.id, &child.props);
                                     (*self.component_registry)
                                         .add_dependency(
                                             &source_component.node.id,
@@ -470,7 +486,7 @@ impl ConsumerProject {
                 }
             } else {
                 // This is a component defined in the consumer project
-                // Create base component
+                // Create base component with props
                 let base_component = ComponentNode::new(
                     component.name.clone(),
                     replace_absolute_path_with_project_name(
@@ -478,7 +494,7 @@ impl ConsumerProject {
                         component.file_path.clone(),
                         self.project_name.clone(),
                     ),
-                    HashMap::new(),
+                    component.props.clone(),
                 );
 
                 println!("child_components: {:?}", component.children);
@@ -495,15 +511,22 @@ impl ConsumerProject {
                                 child.origin_file_path.clone(),
                                 self.project_name.clone(),
                             ),
-                            HashMap::new(),
+                            child.props,
                         )
                     })
                     .collect();
 
                 // Add everything to the graph in one operation
                 unsafe {
-                    (*self.component_registry)
-                        .add_component(base_component.clone(), self.project_name.clone());
+                    if let Some(existing) = (*self.component_registry)
+                        .find_component(&base_component.name, &self.project_name)
+                    {
+                        (*self.component_registry)
+                            .add_props(&existing.node.id, &base_component.props);
+                    } else {
+                        (*self.component_registry)
+                            .add_component(base_component.clone(), self.project_name.clone());
+                    }
 
                     for child in child_components {
                         println!("child: {}", child.name);
@@ -530,6 +553,8 @@ impl ConsumerProject {
                                     (*self.component_registry)
                                         .find_component(&child.name, &child_source_project_name)
                                 } {
+                                    (*self.component_registry)
+                                        .add_props(&source_component.node.id, &child.props);
                                     unsafe {
                                         (*self.component_registry)
                                             .add_dependency(
@@ -553,8 +578,15 @@ impl ConsumerProject {
                             }
                         } else {
                             // Register the child component and add dependency
-                            (*self.component_registry)
-                                .add_component(child.clone(), self.project_name.clone());
+                            if let Some(existing_child) = (*self.component_registry)
+                                .find_component(&child.name, &self.project_name)
+                            {
+                                (*self.component_registry)
+                                    .add_props(&existing_child.node.id, &child.props);
+                            } else {
+                                (*self.component_registry)
+                                    .add_component(child.clone(), self.project_name.clone());
+                            }
                             (*self.component_registry)
                                 .add_dependency(
                                     &base_component.id,
