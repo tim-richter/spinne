@@ -365,7 +365,7 @@
                         <strong>${d.name}</strong><br/>
                         Project: ${d.project_context}<br/>
                         Path: ${d.path}<br/>
-                        Props: ${Object.keys(d.props).join(', ')}
+                        Props: ${formatProps(d.props)}
                     `)
                         .style('left', (event.pageX + 10) + 'px')
                         .style('top', (event.pageY - 28) + 'px');

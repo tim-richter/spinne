@@ -445,7 +445,6 @@ mod tests {
             "App component should exist in consumer project"
         );
 
-        println!("{}", workspace.get_component_registry().to_serializable());
 
         // Verify the connection between App and Button
         if let Some(app_info) = app_component {
@@ -459,5 +458,84 @@ mod tests {
                 "Button dependency should reference source-lib project"
             );
         }
+
+        if let Some(button_info) = button_component {
+            assert_eq!(button_info.node.props.get("label"), Some(&1));
+            assert_eq!(button_info.node.props.get("onClick"), Some(&1));
+        }
+    }
+
+    #[test]
+    fn test_prop_aggregation_across_files() {
+        let temp_dir = test_utils::create_mock_project(&vec![
+            // Source project with a Button component
+            ("source-lib/.git/HEAD", "ref: refs/heads/main"),
+            ("source-lib/package.json", r#"{"name": "source-lib"}"#),
+            (
+                "source-lib/src/components/Button.tsx",
+                r#"
+                import React from 'react';
+
+                export interface ButtonProps {
+                    label: string;
+                    onClick: () => void;
+                    color?: string;
+                }
+
+                export const Button: React.FC<ButtonProps> = ({ label, onClick, color }) => {
+                    return <button className={color} onClick={onClick}>{label}</button>;
+                };
+                "#,
+            ),
+            ("source-lib/src/components/index.ts", r#"export * from './Button';"#),
+            // Consumer project that uses the Button component in two files
+            ("consumer-app/.git/HEAD", "ref: refs/heads/main"),
+            (
+                "consumer-app/package.json",
+                r#"{
+                    "name": "consumer-app",
+                    "dependencies": {
+                        "source-lib": "1.0.0"
+                    }
+                }"#,
+            ),
+            (
+                "consumer-app/src/App.tsx",
+                r#"
+                import React from 'react';
+                import { Button } from 'source-lib';
+
+                export const App: React.FC = () => {
+                    const handleClick = () => console.log('clicked');
+                    return <Button label="Click" onClick={handleClick} />;
+                };
+                "#,
+            ),
+            (
+                "consumer-app/src/Dashboard.tsx",
+                r#"
+                import React from 'react';
+                import { Button } from 'source-lib';
+
+                export const Dashboard: React.FC = () => {
+                    const handleNext = () => console.log('next');
+                    return <Button label="Next" color="blue" onClick={handleNext} />;
+                };
+                "#,
+            ),
+        ]);
+
+        let mut workspace = Workspace::new(temp_dir.path().to_path_buf());
+        workspace.discover_projects();
+        workspace.traverse_projects(&vec![], &vec![]);
+
+        let registry = workspace.get_component_registry();
+        let button = registry
+            .find_component("Button", "source-lib")
+            .expect("Button should exist");
+
+        assert_eq!(button.node.props.get("label"), Some(&2));
+        assert_eq!(button.node.props.get("onClick"), Some(&2));
+        assert_eq!(button.node.props.get("color"), Some(&1));
     }
 }
